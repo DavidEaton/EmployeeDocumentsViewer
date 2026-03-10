@@ -1,7 +1,6 @@
 using FastEndpoints;
 
 namespace EmployeeDocumentsViewer.Features.Documents.Read.GetById;
-
 public sealed class Endpoint(IDocumentRepository repository)
     : Endpoint<Request>
 {
