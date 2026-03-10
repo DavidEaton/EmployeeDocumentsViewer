@@ -7,7 +7,7 @@ public sealed class Endpoint(IDocumentRepository repository)
 {
     public override void Configure()
     {
-        Get("/documents/open/{id:int}");
+        Get("/api/documents/open/{id:int}");
         Policies("InternalUsers");
     }
 
