@@ -1,12 +1,21 @@
 using EmployeeDocumentsViewer.Features.Documents;
 using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
+using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddFastEndpoints();
+builder.Services.SwaggerDocument(options =>
+{
+    options.DocumentSettings = settings =>
+    {
+        settings.Title = "Employee Documents Viewer API";
+        settings.Version = "v1";
+    };
+});
 
 builder.Services
     .AddAuthentication(DevAuthHandler.SchemeName)
@@ -29,14 +38,20 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseFastEndpoints();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwaggerGen();
+}
+
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();

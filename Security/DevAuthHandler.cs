@@ -5,17 +5,12 @@ using Microsoft.Extensions.Options;
 
 namespace EmployeeDocumentsViewer.Security;
 
-public sealed class DevAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+public sealed class DevAuthHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "DevAuth";
-
-    public DevAuthHandler(
-        IOptionsMonitor<AuthenticationSchemeOptions> options,
-        ILoggerFactory logger,
-        UrlEncoder encoder)
-        : base(options, logger, encoder)
-    {
-    }
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {

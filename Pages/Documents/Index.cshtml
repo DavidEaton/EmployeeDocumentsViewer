@@ -20,7 +20,6 @@
 
 @section Scripts
 {
-    <link rel="stylesheet" href="https://cdn.datatables.net/2.3.4/css/dataTables.dataTables.min.css" />
     <script src="https://cdn.datatables.net/2.3.4/js/dataTables.min.js"></script>
 
     <script>
@@ -31,20 +30,21 @@
                 url: '/api/documents/read/list',
                 type: 'POST',
                 contentType: 'application/json',
+                submitAs: 'json',
                 data: function (d) {
                     const order = d.order && d.order.length > 0 ? d.order[0] : null;
                     const columnIndex = order ? order.column : 0;
                     const columnName = d.columns[columnIndex].data;
                     const direction = order ? order.dir : 'asc';
 
-                    return JSON.stringify({
+                    return {
                         draw: d.draw,
                         start: d.start,
                         length: d.length,
                         searchTerm: d.search?.value ?? '',
                         sortColumn: columnName,
                         sortDirection: direction
-                    });
+                    };
                 }
             },
             columns: [
