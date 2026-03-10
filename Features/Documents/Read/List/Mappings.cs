@@ -1,0 +1,12 @@
+namespace EmployeeDocumentsViewer.Features.Documents.Read.List;
+
+internal static class Mappings
+{
+    public static DocumentReadRow ToReadRow(this DocumentRecord document) =>
+        new(
+            document.Id,
+            document.Employee,
+            document.Department,
+            document.DocumentType,
+            document.Year);
+}

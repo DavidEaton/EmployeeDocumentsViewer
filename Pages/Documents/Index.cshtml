@@ -1,0 +1,67 @@
+@page "/documents"
+@model EmployeeDocumentsViewer.Pages.Documents.IndexModel
+@{
+    ViewData["Title"] = "Employee Documents";
+}
+
+<h1>Employee Documents</h1>
+
+<table id="documents" class="display" style="width:100%">
+    <thead>
+        <tr>
+            <th>Employee</th>
+            <th>Department</th>
+            <th>Document Type</th>
+            <th>Year</th>
+            <th>Open</th>
+        </tr>
+    </thead>
+</table>
+
+@section Scripts
+{
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.3.4/css/dataTables.dataTables.min.css" />
+    <script src="https://cdn.datatables.net/2.3.4/js/dataTables.min.js"></script>
+
+    <script>
+        new DataTable('#documents', {
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: '/api/documents/read/list',
+                type: 'POST',
+                contentType: 'application/json',
+                data: function (d) {
+                    const order = d.order && d.order.length > 0 ? d.order[0] : null;
+                    const columnIndex = order ? order.column : 0;
+                    const columnName = d.columns[columnIndex].data;
+                    const direction = order ? order.dir : 'asc';
+
+                    return JSON.stringify({
+                        draw: d.draw,
+                        start: d.start,
+                        length: d.length,
+                        searchTerm: d.search?.value ?? '',
+                        sortColumn: columnName,
+                        sortDirection: direction
+                    });
+                }
+            },
+            columns: [
+                { data: 'employee', name: 'employee' },
+                { data: 'department', name: 'department' },
+                { data: 'documentType', name: 'documentType' },
+                { data: 'year', name: 'year' },
+                {
+                    data: 'documentId',
+                    orderable: false,
+                    searchable: false,
+                    render: function (data) {
+                        return `<a href="/documents/open/${data}" target="_blank" rel="noopener">Open PDF</a>`;
+                    }
+                }
+            ],
+            pageLength: 10
+        });
+    </script>
+}

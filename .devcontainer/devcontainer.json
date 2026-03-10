@@ -1,0 +1,6 @@
+{
+  "name": "employee-documents-viewer",
+  "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+  "forwardPorts": [5000],
+  "postCreateCommand": "dotnet --info"
+}
