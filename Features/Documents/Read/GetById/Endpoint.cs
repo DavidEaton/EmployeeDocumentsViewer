@@ -6,28 +6,35 @@ public sealed class Endpoint(IDocumentRepository repository)
 {
     public override void Configure()
     {
-        Get("/api/documents/open/{id:int}");
+        Get("/api/documents/open/{companyKey}/{id:int}");
         Policies("InternalUsers");
     }
 
-    public override async Task HandleAsync(Request request, CancellationToken ct)
+public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
     {
-        var document = await repository.GetByIdAsync(request.Id, ct);
-
-        if (document is null)
+        if (!Enum.TryParse<Company>(request.CompanyKey, ignoreCase: true, out var company))
         {
-            await Send.NotFoundAsync(ct);
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await HttpContext.Response.WriteAsJsonAsync(
+                new { error = $"Invalid company key '{request.CompanyKey}'." },
+                cancellationToken);
             return;
         }
 
-        var stream = new MemoryStream(document.PdfBytes, writable: false);
+        var document = await repository.GetByIdAsync(company, request.Id, cancellationToken);
+
+        if (document is null)
+        {
+            await Send.NotFoundAsync(cancellationToken);
+            return;
+        }
 
         await Send.StreamAsync(
-            stream: stream,
+            stream: new MemoryStream(document.PdfBytes, writable: false),
             fileName: null,
             fileLengthBytes: document.PdfBytes.Length,
             contentType: "application/pdf",
             enableRangeProcessing: true,
-            cancellation: ct);
-    }
+            cancellation: cancellationToken);
+    }   
 }

@@ -3,6 +3,7 @@ namespace EmployeeDocumentsViewer.Features.Documents;
 public interface IDocumentRepository
 {
     Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentRecord> Items)> SearchAsync(
+        Company company,
         string? searchTerm,
         string? sortColumn,
         string? sortDirection,
@@ -10,5 +11,8 @@ public interface IDocumentRepository
         int length,
         CancellationToken cancellationToken);
 
-    Task<DocumentRecord?> GetByIdAsync(int id, CancellationToken cancellationToken);
+    Task<DocumentRecord?> GetByIdAsync(
+        Company company,
+        int id,
+        CancellationToken cancellationToken);
 }

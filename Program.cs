@@ -30,8 +30,22 @@ builder.Services.AddAuthorizationBuilder()
         policy.RequireClaim("employee_portal", "true");
     });
 
-builder.Services.AddSingleton<IDocumentRepository, InMemoryDocumentRepository>();
+builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
+var companyConnections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+{
+    ["CompanyA"] = builder.Configuration.GetConnectionString("CompanyA")
+        ?? throw new InvalidOperationException("Missing connection string: CompanyA"),
+    ["CompanyB"] = builder.Configuration.GetConnectionString("CompanyB")
+        ?? throw new InvalidOperationException("Missing connection string: CompanyB"),
+    ["CompanyC"] = builder.Configuration.GetConnectionString("CompanyC")
+        ?? throw new InvalidOperationException("Missing connection string: CompanyC"),
+    ["CompanyD"] = builder.Configuration.GetConnectionString("CompanyD")
+        ?? throw new InvalidOperationException("Missing connection string: CompanyD")
+};
 
+// builder.Services.AddScoped<IDocumentRepository>(
+//     _ => new SqlDocumentRepository(companyConnections));
+    
 var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

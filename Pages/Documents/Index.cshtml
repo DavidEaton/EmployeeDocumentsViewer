@@ -6,6 +6,24 @@
 
 <h1>Employee Documents</h1>
 
+<div class="row mb-3">
+    <div class="col-md-4">
+        <label for="companySelect" class="form-label">Company</label>
+        <select id="companySelect" class="form-select">
+            <option value="">-- Select a company --</option>
+            @foreach (var company in Model.Companies)
+            {
+                <option value="@company.Value">@company.Text</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button id="loadDocumentsButton" type="button" class="btn btn-primary w-100">
+            Load Documents
+        </button>
+    </div>
+</div>
+
 <table id="documents" class="display" style="width:100%">
     <thead>
         <tr>
@@ -23,28 +41,77 @@
     <script src="https://cdn.datatables.net/2.3.4/js/dataTables.min.js"></script>
 
     <script>
-        new DataTable('#documents', {
+        const companySelect = document.getElementById('companySelect');
+        const loadDocumentsButton = document.getElementById('loadDocumentsButton');
+
+        const table = new DataTable('#documents', {
             processing: true,
             serverSide: true,
-            ajax: {
-                url: '/api/documents/read/list',
-                type: 'POST',
-                contentType: 'application/json',
-                submitAs: 'json',
-                data: function (d) {
-                    const order = d.order && d.order.length > 0 ? d.order[0] : null;
-                    const columnIndex = order ? order.column : 0;
-                    const columnName = d.columns[columnIndex].data;
-                    const direction = order ? order.dir : 'asc';
+            pageLength: 10,
+            searching: true,
+            ordering: true,
+            ajax: async function (data, callback) {
+                const companyKey = companySelect.value;
 
-                    return {
-                        draw: d.draw,
-                        start: d.start,
-                        length: d.length,
-                        searchTerm: d.search?.value ?? '',
-                        sortColumn: columnName,
-                        sortDirection: direction
-                    };
+                if (!companyKey) {
+                    callback({
+                        draw: data.draw,
+                        recordsTotal: 0,
+                        recordsFiltered: 0,
+                        data: []
+                    });
+                    return;
+                }
+
+                const order = data.order && data.order.length > 0 ? data.order[0] : null;
+                const columnIndex = order ? order.column : 0;
+                const columnName = data.columns[columnIndex].data;
+                const direction = order ? order.dir : 'asc';
+
+                const payload = {
+                    draw: data.draw,
+                    companyKey: companyKey,
+                    start: data.start,
+                    length: data.length,
+                    searchTerm: data.search?.value ?? '',
+                    sortColumn: columnName,
+                    sortDirection: direction
+                };
+
+                try {
+                    const response = await fetch('/api/documents/read/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        console.error('Document list request failed:', response.status, response.statusText);
+
+                        callback({
+                            draw: data.draw,
+                            recordsTotal: 0,
+                            recordsFiltered: 0,
+                            data: []
+                        });
+
+                        return;
+                    }
+
+                    const json = await response.json();
+                    callback(json);
+                }
+                catch (error) {
+                    console.error('Document list request threw an error:', error);
+
+                    callback({
+                        draw: data.draw,
+                        recordsTotal: 0,
+                        recordsFiltered: 0,
+                        data: []
+                    });
                 }
             },
             columns: [
@@ -56,12 +123,26 @@
                     data: 'documentId',
                     orderable: false,
                     searchable: false,
-                    render: function (data) {
-                        return `<a href="/api/documents/open/${data}" target="_blank" rel="noopener">Open PDF</a>`;
+                    render: function (data, type, row) {
+                        return `<a href="/api/documents/open/${encodeURIComponent(row.companyKey)}/${data}" target="_blank" rel="noopener">Open PDF</a>`;
                     }
                 }
-            ],
-            pageLength: 10
+            ]
+        });
+
+        loadDocumentsButton.addEventListener('click', function () {
+            if (!companySelect.value) {
+                alert('Please select a company first.');
+                return;
+            }
+
+            table.ajax.reload();
+        });
+
+        companySelect.addEventListener('change', function () {
+            if (!companySelect.value) {
+                table.ajax.reload();
+            }
         });
     </script>
 }

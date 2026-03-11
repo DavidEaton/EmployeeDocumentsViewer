@@ -3,6 +3,7 @@ namespace EmployeeDocumentsViewer.Features.Documents.Read.List;
 public sealed class Request
 {
     public int Draw { get; init; }
+    public string CompanyKey { get; init; } = string.Empty;
     public int Start { get; init; }
     public int Length { get; init; } = 10;
     public string? SearchTerm { get; init; }
