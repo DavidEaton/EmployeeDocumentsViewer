@@ -1,6 +1,16 @@
 {
   "name": "employee-documents-viewer",
   "image": "mcr.microsoft.com/dotnet/sdk:10.0",
-  "forwardPorts": [5000],
-  "postCreateCommand": "dotnet --info"
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "mounts": [
+    "source=${localEnv:APPDATA}/Microsoft/UserSecrets,target=/root/.microsoft/usersecrets,type=bind",
+    "source=${localEnv:USERPROFILE}\\.aspnet\\https,target=/https,type=bind"
+  ],
+  "forwardPorts": [
+    7218
+  ],
+  "remoteEnv": {
+    "ASPNETCORE_Kestrel__Certificates__Default__Path": "/https/EmployeeDocumentsViewer.pfx"
+  }
 }
