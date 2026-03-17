@@ -1,7 +1,7 @@
 Employee Documents Viewer
 =========================
 
-A lightweight internal web application for securely browsing and opening employee documents stored in blob storage.
+A lightweight internal web application for securely browsing and opening employee documents from Azure blob storage.
 
 The application presents a searchable, sortable grid of documents. Each row contains a hyperlink that opens the document (PDF) directly from the server.
 
@@ -24,9 +24,9 @@ FastEndpoints API
         │  
         ▼  
 Repository  
-        │  
-        ▼  
-Document Storage (Blob Storage or other backing store)
+        │ │  
+        ▼▼  
+Document Storage (Azure Blob Storage) | Employe Data (Azure SQL Database)
 
 ### UI Layer
 
@@ -50,25 +50,10 @@ Document Storage (Blob Storage or other backing store)
 
 ### Data Layer
 
-The demo project uses an **in-memory repository**, but production use would typically read metadata from:
+Reads metadata from **Azure SQL Database**
 
-* Azure SQL Database
 
-* PostgreSQL
-
-* SQL Server
-
-Document files themselves are typically stored in:
-
-* Azure Blob Storage
-
-* AWS S3
-
-* local storage
-
-* any other blob store
-
-* * *
+Document files themselves are stored in **Azure Blob Storage**
 
 Key Features
 ============
@@ -85,8 +70,6 @@ Key Features
 
 * Minimal infrastructure requirements
 
-* * *
-
 Technology Stack
 ================
 
@@ -98,6 +81,9 @@ Technology Stack
 | DataTables        | Interactive data grid         |
 | Swagger / OpenAPI | API testing and documentation |
 | Bootstrap         | Basic styling                 |
+| Azure Storage     | Secure Document storage (cloud)|
+| Azure SQL Database| Employee data                 |
+
 
 * * *
 
@@ -146,6 +132,7 @@ Returns paginated document metadata used by the grid.
 
 Example response:
 
+```json
 {  
   "draw": 1,  
   "recordsTotal": 4,  
@@ -160,23 +147,24 @@ Example response:
     }  
   ]  
 }
+```
 
 * * *
 
 Open Document
 -------------
 
-GET /api/documents/open/{id}
+`GET /api/documents/open/{id}`
 
 Streams the PDF document associated with the specified ID.
 
 Example:
 
-GET /api/documents/open/2
+`GET /api/documents/open/2`
 
 Returns
 
-Content-Type: application/pdf
+`Content-Type: application/pdf`
 
 * * *
 
@@ -197,17 +185,19 @@ Requirements
 Run Locally
 -----------
 
+```bash
 dotnet restore  
 dotnet build  
 dotnet run
+```
 
 The application will start at:
 
-http://localhost:5129
+`http://localhost:5129`
 
 Open:
 
-http://localhost:5129/documents
+`http://localhost:5129/documents`
 
 * * *
 
@@ -216,7 +206,7 @@ Swagger UI
 
 Swagger UI is available in development mode.
 
-http://localhost:5129/swagger
+`http://localhost:5129/swagger`
 
 It allows testing the API endpoints directly.
 
@@ -227,23 +217,15 @@ Development Authentication
 
 The project includes a development authentication handler:
 
-DevAuthHandler
+`DevAuthHandler`
 
 This automatically authenticates requests with the required claim:
 
-employee_portal = true
+`employee_portal = true`
 
 This simplifies development by avoiding external identity providers.
 
-In production, replace this with:
-
-* Azure AD
-
-* OpenID Connect
-
-* corporate SSO
-
-* * *
+In production, replaced with **Azure Entra Identity**
 
 Data Source
 ===========
@@ -282,43 +264,37 @@ Azure App Service
 
 The application retrieves metadata from the database and streams documents from blob storage through the API endpoint.
 
-* * *
-
 Security Considerations
 =======================
 
-Recommended production practices:
+Production practices:
 
-* Use Azure AD or corporate SSO
+* Uses Azure Entra for Identity
 
-* Store documents in private blob containers
+* Stores documents in private blob containers
 
-* Stream files through the API instead of exposing direct blob URLs
+* Streams files through the API instead of exposing direct blob URLs to clients
 
-* Restrict Swagger UI to development environments
+* Restricts Swagger UI to development environments
 
-* * *
-
-Future Improvements
+Feature Roadmap
 ===================
 
-Possible enhancements:
+Planned enhancements:
 
 * Azure SQL integration
 
 * Azure Blob Storage integration
 
-* document preview
-
 * role-based access control
+
+Potential upgrades:
+
+* document preview
 
 * audit logging
 
 * document upload capability
-
-* caching for frequently accessed documents
-
-* * *
 
 License
 =======
