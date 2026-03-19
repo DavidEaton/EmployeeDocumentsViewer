@@ -7,9 +7,11 @@ internal static class Mappings
         string companyKey) =>
         new(
             companyKey,
-            document.Id,
+            document.BlobName,
+            document.EmployeeId,
             document.Employee,
             document.Department,
             document.DocumentType,
-            document.Year);
+            document.Year,
+            document.UpdatedUtc?.UtcDateTime.ToString("O"));
 }

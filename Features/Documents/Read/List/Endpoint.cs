@@ -1,3 +1,4 @@
+using EmployeeDocumentsViewer.Features;
 using FastEndpoints;
 
 namespace EmployeeDocumentsViewer.Features.Documents.Read.List;
@@ -31,13 +32,12 @@ public sealed class Endpoint(IDocumentRepository repository)
             request.Length,
             cancellationToken);
 
-        await Send.OkAsync(new Response()
+        await Send.OkAsync(new Response
         {
             Draw = request.Draw,
             RecordsTotal = totalCount,
             RecordsFiltered = filteredCount,
-            Data = [.. items.Select(record
-                => record.ToReadRow(request.CompanyKey))]
+            Data = [.. items.Select(record => record.ToReadRow(request.CompanyKey))]
         }, cancellationToken);
     }
 }

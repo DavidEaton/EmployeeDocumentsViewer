@@ -9,19 +9,26 @@ public sealed class CompanyConnectionStringResolver(
 {
     private readonly CompanyConnectionOptions _options = options.Value;
 
-    public string GetConnectionString(Company company)
+    public string GetSqlConnectionString(Company company)
     {
-        var key = company.ToString();
-
-        if (!_options.Companies.TryGetValue(key, out var item))
-            throw new InvalidOperationException(
-                $"No company connection configuration exists for company '{key}'.");
+        var item = GetCompanyItem(company);
 
         if (string.IsNullOrWhiteSpace(item.ConnectionString))
             throw new InvalidOperationException(
-                $"Connection string for company '{key}' is missing.");
+                $"SQL connection string for company '{company}' is missing.");
 
         return item.ConnectionString;
+    }
+
+    public string GetBlobStorageConnectionString(Company company)
+    {
+        var item = GetCompanyItem(company);
+
+        if (string.IsNullOrWhiteSpace(item.BlobStorageConnectionString))
+            throw new InvalidOperationException(
+                $"Blob storage connection string for company '{company}' is missing.");
+
+        return item.BlobStorageConnectionString;
     }
 
     public IReadOnlyList<CompanyOption> GetAvailableCompanies() =>
@@ -35,4 +42,15 @@ public sealed class CompanyConnectionStringResolver(
                     ? new CompanyOption(company, item.DisplayName)
                     : new CompanyOption(company, key);
             })];
+
+    private CompanyConnectionItem GetCompanyItem(Company company)
+    {
+        var key = company.ToString();
+
+        if (!_options.Companies.TryGetValue(key, out var item))
+            throw new InvalidOperationException(
+                $"No company connection configuration exists for company '{key}'.");
+
+        return item;
+    }
 }

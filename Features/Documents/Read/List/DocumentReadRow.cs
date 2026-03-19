@@ -2,8 +2,10 @@ namespace EmployeeDocumentsViewer.Features.Documents.Read.List;
 
 public sealed record DocumentReadRow(
     string CompanyKey,
-    int DocumentId,
+    string BlobName,
+    int EmployeeId,
     string Employee,
     string Department,
     string DocumentType,
-    int Year);
+    int Year,
+    string? UpdatedUtc);

@@ -1,3 +1,4 @@
+using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents;
 using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
@@ -17,6 +18,14 @@ builder.Services.SwaggerDocument(options =>
     };
 });
 
+builder.Services.Configure<CompanyConnectionOptions>(
+    builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
+builder.Services.Configure<CompanyConnectionItem>(
+    builder.Configuration.GetSection(StorageOptions.SectionName));
+
+builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
+builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
+
 builder.Services
     .AddAuthentication(DevAuthHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(
@@ -30,24 +39,8 @@ builder.Services.AddAuthorizationBuilder()
         policy.RequireClaim("employee_portal", "true");
     });
 
-builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
-var companyConnections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-{
-    ["CompanyA"] = builder.Configuration.GetConnectionString("CompanyA")
-        ?? throw new InvalidOperationException("Missing connection string: CompanyA"),
-    ["CompanyB"] = builder.Configuration.GetConnectionString("CompanyB")
-        ?? throw new InvalidOperationException("Missing connection string: CompanyB"),
-    ["CompanyC"] = builder.Configuration.GetConnectionString("CompanyC")
-        ?? throw new InvalidOperationException("Missing connection string: CompanyC"),
-    ["CompanyD"] = builder.Configuration.GetConnectionString("CompanyD")
-        ?? throw new InvalidOperationException("Missing connection string: CompanyD")
-};
-
-// builder.Services.AddScoped<IDocumentRepository>(
-//     _ => new SqlDocumentRepository(companyConnections));
-    
 var app = builder.Build();
-// Configure the HTTP request pipeline.
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -62,14 +55,10 @@ app.UseAuthorization();
 app.UseFastEndpoints();
 
 if (app.Environment.IsDevelopment())
-{
     app.UseSwaggerGen();
-}
 
 app.MapStaticAssets();
-app.MapRazorPages()
-   .WithStaticAssets();
-
+app.MapRazorPages().WithStaticAssets();
 app.MapGet("/", () => Results.LocalRedirect("/documents"));
 
 app.Run();

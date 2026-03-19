@@ -1,14 +1,22 @@
+using System.Data;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Azure;
+using Azure.Storage.Blobs;
+using EmployeeDocumentsViewer.Configuration;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
+
 namespace EmployeeDocumentsViewer.Features.Documents;
 
-public class SqlDocumentRepository : IDocumentRepository
+public sealed partial class SqlDocumentRepository(
+    ICompanyConnectionStringResolver connectionResolver,
+    IOptions<StorageOptions> storageOptions)
+    : IDocumentRepository
 {
-    public Task<DocumentRecord?> GetByIdAsync(
-        Company company,
-        int id,
-        CancellationToken cancellationToken) =>
-            throw new NotImplementedException();
+    private readonly string _documentsContainerName = storageOptions.Value.DocumentsContainerName;
 
-    public Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentRecord> Items)> SearchAsync(
+    public async Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentRecord> Items)> SearchAsync(
         Company company,
         string? searchTerm,
         string? sortColumn,
@@ -16,5 +24,301 @@ public class SqlDocumentRepository : IDocumentRepository
         int start,
         int length,
         CancellationToken cancellationToken)
-        => throw new NotImplementedException();
+    {
+        var employees = await LoadEmployeesAsync(company, cancellationToken);
+        if (employees.Count == 0)
+            return (0, 0, []);
+
+        var blobs = await LoadDocumentBlobsAsync(company, cancellationToken);
+
+        var joined = blobs
+            .Select(blob => TryCreateRecord(blob, employees))
+            .Where(record => record is not null)
+            .Cast<DocumentRecord>()
+            .ToList();
+
+        var totalCount = joined.Count;
+
+        IEnumerable<DocumentRecord> filteredQuery = joined;
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim();
+            filteredQuery = filteredQuery.Where(record =>
+                record.Employee.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || record.Department.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || record.DocumentType.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || record.BlobName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || record.EmployeeId.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase)
+                || record.Year.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var filtered = ApplySort(filteredQuery, sortColumn, sortDirection).ToList();
+        var filteredCount = filtered.Count;
+
+        var page = filtered
+            .Skip(Math.Max(0, start))
+            .Take(length <= 0 ? 10 : length)
+            .ToArray();
+
+        return (totalCount, filteredCount, page);
+    }
+
+    public async Task<BlobDocumentStream?> OpenReadAsync(
+        Company company,
+        string blobName,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(blobName))
+            return null;
+
+        var container = CreateDocumentsContainerClient(company);
+        var blobClient = container.GetBlobClient(blobName);
+
+        Response<bool> exists;
+        try
+        {
+            exists = await blobClient.ExistsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (RequestFailedException)
+        {
+            return null;
+        }
+
+        if (!exists.Value)
+            return null;
+
+        var download = await blobClient
+            .DownloadStreamingAsync(cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var contentType = !string.IsNullOrWhiteSpace(download.Value.Details.ContentType)
+            ? download.Value.Details.ContentType
+            : GetContentTypeFromFileName(blobName);
+
+        return new BlobDocumentStream
+        {
+            BlobName = blobName,
+            Content = download.Value.Content,
+            Length = download.Value.Details.ContentLength,
+            ContentType = contentType
+        };
+    }
+
+    private async Task<Dictionary<int, EmployeeLookup>> LoadEmployeesAsync(
+        Company company,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            select
+                emp.Id,
+                emp.NameLastFirst,
+                emp.HomeDepartment,
+                emp.Active,
+                term.TerminationDate
+            from Common.EmployeeEeDocsLookup emp
+            outer apply
+            (
+                select top (1)
+                    tm.TerminationDate
+                from HR.Terminations tm
+                where tm.PartyID = emp.Id
+                order by tm.TerminationDate desc
+            ) term
+            order by emp.Id;
+            """;
+
+        var result = new Dictionary<int, EmployeeLookup>();
+
+        await using var connection = new SqlConnection(connectionResolver.GetSqlConnectionString(company));
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+        await using var command = new SqlCommand(sql, connection)
+        {
+            CommandType = CommandType.Text
+        };
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var id = reader.GetInt32(reader.GetOrdinal("Id"));
+
+            var employee = new EmployeeLookup(
+                Id: id,
+                Name: reader["NameLastFirst"] as string ?? string.Empty,
+                Department: reader["HomeDepartment"] as string ?? string.Empty,
+                Active: reader["Active"] is bool active && active,
+                TerminationDate: reader["TerminationDate"] is DBNull
+                    ? null
+                    : (DateTime?)reader["TerminationDate"]);
+
+            result[id] = employee;
+        }
+
+        return result;
+    }
+
+    private async Task<IReadOnlyList<BlobLookup>> LoadDocumentBlobsAsync(
+        Company company,
+        CancellationToken cancellationToken)
+    {
+        var container = CreateDocumentsContainerClient(company);
+        var items = new List<BlobLookup>();
+
+        await foreach (var blobItem in container.GetBlobsAsync(cancellationToken: cancellationToken))
+        {
+            if (!TryParseEmployeeDocumentBlobName(blobItem.Name, out var employeeId, out var documentTypeToken))
+                continue;
+
+            var updatedUtc = TryGetUpdatedDate((IReadOnlyDictionary<string, string>)blobItem.Metadata, blobItem.Properties.LastModified);
+
+            items.Add(new BlobLookup(
+                BlobName: blobItem.Name,
+                EmployeeId: employeeId,
+                DocumentTypeToken: documentTypeToken,
+                UpdatedUtc: updatedUtc,
+                ContentType: blobItem.Properties.ContentType));
+        }
+
+        return items;
+    }
+
+    private DocumentRecord? TryCreateRecord(
+        BlobLookup blob,
+        IReadOnlyDictionary<int, EmployeeLookup> employees)
+    {
+        if (!employees.TryGetValue(blob.EmployeeId, out var employee))
+            return null;
+
+        return new DocumentRecord(
+            BlobName: blob.BlobName,
+            EmployeeId: blob.EmployeeId,
+            Employee: employee.Name,
+            Department: employee.Department,
+            DocumentType: HumanizeDocumentType(blob.DocumentTypeToken),
+            Year: (blob.UpdatedUtc ?? DateTimeOffset.UtcNow).Year,
+            UpdatedUtc: blob.UpdatedUtc,
+            ContentType: blob.ContentType);
+    }
+
+    private BlobContainerClient CreateDocumentsContainerClient(Company company) =>
+        new(connectionResolver.GetBlobStorageConnectionString(company), _documentsContainerName);
+
+    private static IEnumerable<DocumentRecord> ApplySort(
+        IEnumerable<DocumentRecord> source,
+        string? sortColumn,
+        string? sortDirection)
+    {
+        var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+
+        return (sortColumn ?? string.Empty).ToLowerInvariant() switch
+        {
+            "employee" => descending
+                ? source.OrderByDescending(x => x.Employee).ThenByDescending(x => x.BlobName)
+                : source.OrderBy(x => x.Employee).ThenBy(x => x.BlobName),
+            "department" => descending
+                ? source.OrderByDescending(x => x.Department).ThenByDescending(x => x.Employee)
+                : source.OrderBy(x => x.Department).ThenBy(x => x.Employee),
+            "documenttype" => descending
+                ? source.OrderByDescending(x => x.DocumentType).ThenByDescending(x => x.Employee)
+                : source.OrderBy(x => x.DocumentType).ThenBy(x => x.Employee),
+            "year" => descending
+                ? source.OrderByDescending(x => x.Year).ThenByDescending(x => x.Employee)
+                : source.OrderBy(x => x.Year).ThenBy(x => x.Employee),
+            _ => descending
+                ? source.OrderByDescending(x => x.UpdatedUtc).ThenByDescending(x => x.Employee)
+                : source.OrderByDescending(x => x.UpdatedUtc).ThenBy(x => x.Employee)
+        };
+    }
+
+    private static bool TryParseEmployeeDocumentBlobName(
+        string blobName,
+        out int employeeId,
+        out string documentTypeToken)
+    {
+        employeeId = 0;
+        documentTypeToken = string.Empty;
+
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(blobName);
+        if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+            return false;
+
+        var underscoreIndex = fileNameWithoutExtension.IndexOf('_');
+        if (underscoreIndex <= 0)
+            return false;
+
+        var employeeToken = fileNameWithoutExtension[..underscoreIndex];
+        if (!int.TryParse(employeeToken, NumberStyles.None, CultureInfo.InvariantCulture, out employeeId))
+            return false;
+
+        var remainder = fileNameWithoutExtension[(underscoreIndex + 1)..];
+        if (string.IsNullOrWhiteSpace(remainder))
+            return false;
+
+        documentTypeToken = TrailingInstanceSuffixRegex().Replace(remainder, string.Empty);
+        return !string.IsNullOrWhiteSpace(documentTypeToken);
+    }
+
+    private static DateTimeOffset? TryGetUpdatedDate(
+        IReadOnlyDictionary<string, string> metadata,
+        DateTimeOffset? lastModified)
+    {
+        if (metadata.TryGetValue("UpdatedDate", out var updatedDate)
+            && DateTimeOffset.TryParse(
+                updatedDate,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces,
+                out var parsed))
+        {
+            return parsed;
+        }
+
+        return lastModified;
+    }
+
+    private static string HumanizeDocumentType(string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return token;
+
+        var withSpaces = PascalCaseBoundaryRegex().Replace(token, " $1");
+        return withSpaces.Replace("  ", " ").Trim();
+    }
+
+    private static string GetContentTypeFromFileName(string blobName)
+    {
+        var extension = Path.GetExtension(blobName).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".txt" => "text/plain",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            _ => "application/octet-stream"
+        };
+    }
+
+    private sealed record EmployeeLookup(
+        int Id,
+        string Name,
+        string Department,
+        bool Active,
+        DateTime? TerminationDate);
+
+    private sealed record BlobLookup(
+        string BlobName,
+        int EmployeeId,
+        string DocumentTypeToken,
+        DateTimeOffset? UpdatedUtc,
+        string? ContentType);
+
+    [GeneratedRegex(@"\(\d+\)$", RegexOptions.Compiled)]
+    private static partial Regex TrailingInstanceSuffixRegex();
+
+    [GeneratedRegex("([A-Z])", RegexOptions.Compiled)]
+    private static partial Regex PascalCaseBoundaryRegex();
 }

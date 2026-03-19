@@ -11,8 +11,8 @@ public interface IDocumentRepository
         int length,
         CancellationToken cancellationToken);
 
-    Task<DocumentRecord?> GetByIdAsync(
+    Task<BlobDocumentStream?> OpenReadAsync(
         Company company,
-        int id,
+        string blobName,
         CancellationToken cancellationToken);
 }

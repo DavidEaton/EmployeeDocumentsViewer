@@ -4,7 +4,8 @@ namespace EmployeeDocumentsViewer.Configuration;
 
 public interface ICompanyConnectionStringResolver
 {
-    string GetConnectionString(Company company);
+    string GetSqlConnectionString(Company company);
+    string GetBlobStorageConnectionString(Company company);
     IReadOnlyList<CompanyOption> GetAvailableCompanies();
 }
 

@@ -1,16 +1,18 @@
 using FastEndpoints;
 
 namespace EmployeeDocumentsViewer.Features.Documents.Read.GetById;
+
 public sealed class Endpoint(IDocumentRepository repository)
     : Endpoint<Request>
 {
     public override void Configure()
     {
-        Get("/api/documents/open/{companyKey}/{id:int}");
+        Get("/api/documents/open/{companyKey}");
+        AllowFileUploads();
         Policies("InternalUsers");
     }
 
-public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
+    public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
     {
         if (!Enum.TryParse<Company>(request.CompanyKey, ignoreCase: true, out var company))
         {
@@ -21,7 +23,19 @@ public override async Task HandleAsync(Request request, CancellationToken cancel
             return;
         }
 
-        var document = await repository.GetByIdAsync(company, request.Id, cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.BlobName))
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await HttpContext.Response.WriteAsJsonAsync(
+                new { error = "Missing blobName query string value." },
+                cancellationToken);
+            return;
+        }
+
+        await using var document = await repository.OpenReadAsync(
+            company,
+            request.BlobName,
+            cancellationToken);
 
         if (document is null)
         {
@@ -30,11 +44,11 @@ public override async Task HandleAsync(Request request, CancellationToken cancel
         }
 
         await Send.StreamAsync(
-            stream: new MemoryStream(document.PdfBytes, writable: false),
-            fileName: null,
-            fileLengthBytes: document.PdfBytes.Length,
-            contentType: "application/pdf",
+            stream: document.Content,
+            fileName: Path.GetFileName(document.BlobName),
+            fileLengthBytes: document.Length,
+            contentType: document.ContentType,
             enableRangeProcessing: true,
             cancellation: cancellationToken);
-    }   
+    }
 }

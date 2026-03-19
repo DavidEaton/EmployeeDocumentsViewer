@@ -120,11 +120,13 @@
                 { data: 'documentType', name: 'documentType' },
                 { data: 'year', name: 'year' },
                 {
-                    data: 'documentId',
+                    data: 'blobName',
                     orderable: false,
                     searchable: false,
                     render: function (data, type, row) {
-                        return `<a href="/api/documents/open/${encodeURIComponent(row.companyKey)}/${data}" target="_blank" rel="noopener">Open PDF</a>`;
+                        const companyKey = encodeURIComponent(row.companyKey);
+                        const blobName = encodeURIComponent(data);
+                        return `<a href="/api/documents/open/${companyKey}?blobName=${blobName}" target="_blank" rel="noopener">Open document</a>`;
                     }
                 }
             ]

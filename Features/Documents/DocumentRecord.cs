@@ -1,10 +1,11 @@
 namespace EmployeeDocumentsViewer.Features.Documents;
 
 public sealed record DocumentRecord(
-    int Id,
+    string BlobName,
+    int EmployeeId,
     string Employee,
     string Department,
     string DocumentType,
     int Year,
-    string FileName,
-    byte[] PdfBytes);
+    DateTimeOffset? UpdatedUtc,
+    string? ContentType);
