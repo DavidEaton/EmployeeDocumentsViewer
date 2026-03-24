@@ -1,4 +1,4 @@
-namespace EmployeeDocumentsViewer.Features.Documents.Read.GetById;
+namespace EmployeeDocumentsViewer.Features.Documents.Read.Open;
 
 public sealed class Request
 {

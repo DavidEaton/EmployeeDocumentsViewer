@@ -27,10 +27,13 @@
 <table id="documents" class="display" style="width:100%">
     <thead>
         <tr>
+            <th>Employee ID</th>
             <th>Employee</th>
             <th>Department</th>
             <th>Document Type</th>
             <th>Year</th>
+            <th>Status</th>
+            <th>Termination Date</th>
             <th>Open</th>
         </tr>
     </thead>
@@ -64,7 +67,7 @@
                 }
 
                 const order = data.order && data.order.length > 0 ? data.order[0] : null;
-                const columnIndex = order ? order.column : 0;
+                const columnIndex = order ? order.column : 1;
                 const columnName = data.columns[columnIndex].data;
                 const direction = order ? order.dir : 'asc';
 
@@ -115,18 +118,46 @@
                 }
             },
             columns: [
+                { data: 'employeeId', name: 'employeeId' },
                 { data: 'employee', name: 'employee' },
                 { data: 'department', name: 'department' },
                 { data: 'documentType', name: 'documentType' },
                 { data: 'year', name: 'year' },
                 {
+                    data: 'active',
+                    name: 'active',
+                    render: function (data) {
+                        return data ? 'Active' : 'Terminated';
+                    }
+                },
+                {
+                    data: 'terminationDate',
+                    name: 'terminationDate',
+                    render: function (data, type) {
+                        if (!data) {
+                            return '';
+                        }
+
+                        if (type === 'sort' || type === 'type') {
+                            return data;
+                        }
+
+                        const date = new Date(data);
+                        if (Number.isNaN(date.getTime())) {
+                            return data;
+                        }
+
+                        return date.toLocaleDateString();
+                    }
+                },
+                {
                     data: 'blobName',
                     orderable: false,
                     searchable: false,
                     render: function (data, type, row) {
-                        const companyKey = encodeURIComponent(row.companyKey);
+                        const company = encodeURIComponent(row.companyKey);
                         const blobName = encodeURIComponent(data);
-                        return `<a href="/api/documents/open/${companyKey}?blobName=${blobName}" target="_blank" rel="noopener">Open document</a>`;
+                        return `<a href="/api/documents/open/${company}/${blobName}" target="_blank" rel="noopener">Open PDF</a>`;
                     }
                 }
             ]

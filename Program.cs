@@ -18,14 +18,6 @@ builder.Services.SwaggerDocument(options =>
     };
 });
 
-builder.Services.Configure<CompanyConnectionOptions>(
-    builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
-builder.Services.Configure<CompanyConnectionItem>(
-    builder.Configuration.GetSection(StorageOptions.SectionName));
-
-builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
-builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
-
 builder.Services
     .AddAuthentication(DevAuthHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(
@@ -39,15 +31,23 @@ builder.Services.AddAuthorizationBuilder()
         policy.RequireClaim("employee_portal", "true");
     });
 
+builder.Services.Configure<CompanyConnectionOptions>(
+    builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
+builder.Services.Configure<CompanyConnectionItem>(
+    builder.Configuration.GetSection(StorageOptions.SectionName));
+
+builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
+builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
+
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
-    app.UseHttpsRedirection();
 }
 
+app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
@@ -55,7 +55,9 @@ app.UseAuthorization();
 app.UseFastEndpoints();
 
 if (app.Environment.IsDevelopment())
+{
     app.UseSwaggerGen();
+}
 
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();

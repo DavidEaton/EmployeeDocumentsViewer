@@ -1,14 +1,13 @@
 using FastEndpoints;
 
-namespace EmployeeDocumentsViewer.Features.Documents.Read.GetById;
+namespace EmployeeDocumentsViewer.Features.Documents.Read.Open;
 
 public sealed class Endpoint(IDocumentRepository repository)
     : Endpoint<Request>
 {
     public override void Configure()
     {
-        Get("/api/documents/open/{companyKey}");
-        AllowFileUploads();
+        Get("/api/documents/read/open/{companyKey}");
         Policies("InternalUsers");
     }
 
@@ -32,7 +31,7 @@ public sealed class Endpoint(IDocumentRepository repository)
             return;
         }
 
-        await using var document = await repository.OpenReadAsync(
+        var document = await repository.OpenReadAsync(
             company,
             request.BlobName,
             cancellationToken);
@@ -43,8 +42,10 @@ public sealed class Endpoint(IDocumentRepository repository)
             return;
         }
 
+        await using var content = document.Content;
+
         await Send.StreamAsync(
-            stream: document.Content,
+            stream: content,
             fileName: Path.GetFileName(document.BlobName),
             fileLengthBytes: document.Length,
             contentType: document.ContentType,

@@ -11,24 +11,22 @@ public sealed class CompanyConnectionStringResolver(
 
     public string GetSqlConnectionString(Company company)
     {
-        var item = GetCompanyItem(company);
+        CompanyConnectionItem item = GetCompanyItem(company);
 
-        if (string.IsNullOrWhiteSpace(item.ConnectionString))
-            throw new InvalidOperationException(
-                $"SQL connection string for company '{company}' is missing.");
-
-        return item.ConnectionString;
+        return string.IsNullOrWhiteSpace(item.ConnectionString)
+            ? throw new InvalidOperationException(
+                $"SQL connection string for company '{company}' is missing.")
+            : item.ConnectionString;
     }
 
     public string GetBlobStorageConnectionString(Company company)
     {
         var item = GetCompanyItem(company);
 
-        if (string.IsNullOrWhiteSpace(item.BlobStorageConnectionString))
-            throw new InvalidOperationException(
-                $"Blob storage connection string for company '{company}' is missing.");
-
-        return item.BlobStorageConnectionString;
+        return string.IsNullOrWhiteSpace(item.BlobStorageConnectionString)
+            ? throw new InvalidOperationException(
+                $"Blob storage connection string for company '{company}' is missing.")
+            : item.BlobStorageConnectionString;
     }
 
     public IReadOnlyList<CompanyOption> GetAvailableCompanies() =>
@@ -47,10 +45,9 @@ public sealed class CompanyConnectionStringResolver(
     {
         var key = company.ToString();
 
-        if (!_options.Companies.TryGetValue(key, out var item))
-            throw new InvalidOperationException(
-                $"No company connection configuration exists for company '{key}'.");
-
-        return item;
+        return !_options.Companies.TryGetValue(key, out var item)
+            ? throw new InvalidOperationException(
+                $"No company connection configuration exists for company '{key}'.")
+            : item;
     }
 }
