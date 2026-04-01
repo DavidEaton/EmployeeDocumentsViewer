@@ -46,16 +46,22 @@ public sealed partial class SqlDocumentRepository(
             var term = searchTerm.Trim();
 
             filteredQuery = filteredQuery.Where(record =>
-                record.Employee.Contains(term, StringComparison.OrdinalIgnoreCase)
-                || record.Department.Contains(term, StringComparison.OrdinalIgnoreCase)
-                || record.DocumentType.Contains(term, StringComparison.OrdinalIgnoreCase)
-                || record.BlobName.Contains(term, StringComparison.OrdinalIgnoreCase)
-                || record.EmployeeId.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase)
-                || record.Year.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase)
-                || (record.Active ? "active" : "terminated").Contains(term, StringComparison.OrdinalIgnoreCase)
-                || (record.TerminationDate.HasValue
-                    && record.TerminationDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                        .Contains(term, StringComparison.OrdinalIgnoreCase)));
+            {
+                var employeeIdText = record.EmployeeId.ToString(CultureInfo.InvariantCulture);
+                var yearText = record.Year.ToString(CultureInfo.InvariantCulture);
+                var statusText = record.Active ? "active" : "terminated";
+                var terminationDateText = record.TerminationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+                return
+                    record.Employee.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || record.Department.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || record.DocumentType.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || record.BlobName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || statusText.Contains(term, StringComparison.OrdinalIgnoreCase)
+                    || employeeIdText.Contains(term)
+                    || yearText.Contains(term)
+                    || (terminationDateText is not null && terminationDateText.Contains(term));
+            });
         }
 
         var filtered = ApplySort(filteredQuery, sortColumn, sortDirection).ToList();
