@@ -1,20 +1,19 @@
-using EmployeeDocumentsViewer.Features;
+using EmployeeDocumentsViewer.Configuration;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace EmployeeDocumentsViewer.Pages.Documents;
 
-public sealed class IndexModel : PageModel
+public sealed class IndexModel(ICompanyConnectionStringResolver companyResolver) : PageModel
 {
     public IReadOnlyList<SelectListItem> Companies { get; private set; } = [];
 
     public void OnGet() =>
-        Companies = Enum.GetValues<Company>()
-            .Select(company =>
-            new SelectListItem
+        Companies = companyResolver.GetAvailableCompanies()
+            .Select(option => new SelectListItem
             {
-                Value = company.ToString(),
-                Text = company.ToString()
+                Value = option.Company.ToString(),
+                Text = option.DisplayName
             })
             .ToArray();
 }

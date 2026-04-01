@@ -8,4 +8,6 @@ public sealed record DocumentRecord(
     string DocumentType,
     int Year,
     DateTimeOffset? UpdatedUtc,
+    bool Active,
+    DateTime? TerminationDate,
     string? ContentType);

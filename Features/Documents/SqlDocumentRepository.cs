@@ -44,13 +44,18 @@ public sealed partial class SqlDocumentRepository(
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
             var term = searchTerm.Trim();
+
             filteredQuery = filteredQuery.Where(record =>
                 record.Employee.Contains(term, StringComparison.OrdinalIgnoreCase)
                 || record.Department.Contains(term, StringComparison.OrdinalIgnoreCase)
                 || record.DocumentType.Contains(term, StringComparison.OrdinalIgnoreCase)
                 || record.BlobName.Contains(term, StringComparison.OrdinalIgnoreCase)
                 || record.EmployeeId.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase)
-                || record.Year.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase));
+                || record.Year.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase)
+                || (record.Active ? "active" : "terminated").Contains(term, StringComparison.OrdinalIgnoreCase)
+                || (record.TerminationDate.HasValue
+                    && record.TerminationDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                        .Contains(term, StringComparison.OrdinalIgnoreCase)));
         }
 
         var filtered = ApplySort(filteredQuery, sortColumn, sortDirection).ToList();
@@ -170,7 +175,7 @@ public sealed partial class SqlDocumentRepository(
             if (!TryParseEmployeeDocumentBlobName(blobItem.Name, out var employeeId, out var documentTypeToken))
                 continue;
 
-            var updatedUtc = TryGetUpdatedDate((IReadOnlyDictionary<string, string>)blobItem.Metadata, blobItem.Properties.LastModified);
+            var updatedUtc = TryGetUpdatedDate(blobItem.Metadata, blobItem.Properties.LastModified);
 
             items.Add(new BlobLookup(
                 BlobName: blobItem.Name,
@@ -198,6 +203,8 @@ public sealed partial class SqlDocumentRepository(
             DocumentType: HumanizeDocumentType(blob.DocumentTypeToken),
             Year: (blob.UpdatedUtc ?? DateTimeOffset.UtcNow).Year,
             UpdatedUtc: blob.UpdatedUtc,
+            Active: employee.Active,
+            TerminationDate: employee.TerminationDate,
             ContentType: blob.ContentType);
     }
 
@@ -213,18 +220,34 @@ public sealed partial class SqlDocumentRepository(
 
         return (sortColumn ?? string.Empty).ToLowerInvariant() switch
         {
+            "employeeid" => descending
+                ? source.OrderByDescending(x => x.EmployeeId).ThenByDescending(x => x.BlobName)
+                : source.OrderBy(x => x.EmployeeId).ThenBy(x => x.BlobName),
+
             "employee" => descending
                 ? source.OrderByDescending(x => x.Employee).ThenByDescending(x => x.BlobName)
                 : source.OrderBy(x => x.Employee).ThenBy(x => x.BlobName),
+
             "department" => descending
                 ? source.OrderByDescending(x => x.Department).ThenByDescending(x => x.Employee)
                 : source.OrderBy(x => x.Department).ThenBy(x => x.Employee),
+
             "documenttype" => descending
                 ? source.OrderByDescending(x => x.DocumentType).ThenByDescending(x => x.Employee)
                 : source.OrderBy(x => x.DocumentType).ThenBy(x => x.Employee),
+
             "year" => descending
                 ? source.OrderByDescending(x => x.Year).ThenByDescending(x => x.Employee)
                 : source.OrderBy(x => x.Year).ThenBy(x => x.Employee),
+
+            "active" => descending
+                ? source.OrderByDescending(x => x.Active).ThenByDescending(x => x.Employee)
+                : source.OrderBy(x => x.Active).ThenBy(x => x.Employee),
+
+            "terminationdate" => descending
+                ? source.OrderByDescending(x => x.TerminationDate).ThenByDescending(x => x.Employee)
+                : source.OrderBy(x => x.TerminationDate).ThenBy(x => x.Employee),
+
             _ => descending
                 ? source.OrderByDescending(x => x.UpdatedUtc).ThenByDescending(x => x.Employee)
                 : source.OrderByDescending(x => x.UpdatedUtc).ThenBy(x => x.Employee)
@@ -260,7 +283,7 @@ public sealed partial class SqlDocumentRepository(
     }
 
     private static DateTimeOffset? TryGetUpdatedDate(
-        IReadOnlyDictionary<string, string> metadata,
+        IDictionary<string, string> metadata,
         DateTimeOffset? lastModified)
     {
         if (metadata.TryGetValue("UpdatedDate", out var updatedDate)

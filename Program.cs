@@ -31,9 +31,15 @@ builder.Services.AddAuthorizationBuilder()
         policy.RequireClaim("employee_portal", "true");
     });
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+});
+
 builder.Services.Configure<CompanyConnectionOptions>(
     builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
-builder.Services.Configure<CompanyConnectionItem>(
+
+builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection(StorageOptions.SectionName));
 
 builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();

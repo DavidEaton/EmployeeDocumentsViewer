@@ -11,7 +11,7 @@ public sealed class CompanyConnectionStringResolver(
 
     public string GetSqlConnectionString(Company company)
     {
-        CompanyConnectionItem item = GetCompanyItem(company);
+        var item = GetCompanyItem(company);
 
         return string.IsNullOrWhiteSpace(item.ConnectionString)
             ? throw new InvalidOperationException(

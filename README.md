@@ -154,13 +154,13 @@ Example response:
 Open Document
 -------------
 
-`GET /api/documents/open/{id}`
+`GET /api/documents/read/getbyblobname/{companyKey}?blobName={blobName}`
 
 Streams the PDF document associated with the specified ID.
 
 Example:
 
-`GET /api/documents/open/2`
+`GET /api/documents/read/getbyblobname/CII?blobName=123_W4.pdf`
 
 Returns
 

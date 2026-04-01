@@ -13,5 +13,7 @@ internal static class Mappings
             document.Department,
             document.DocumentType,
             document.Year,
+            document.Active,
+            document.TerminationDate,
             document.UpdatedUtc?.UtcDateTime.ToString("O"));
 }

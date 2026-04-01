@@ -7,7 +7,7 @@ public sealed class Endpoint(IDocumentRepository repository)
 {
     public override void Configure()
     {
-        Get("/api/documents/read/open/{companyKey}");
+        Get("/api/documents/read/GetByBlobName/{companyKey}");
         Policies("InternalUsers");
     }
 
