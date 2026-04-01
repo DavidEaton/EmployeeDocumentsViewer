@@ -1,4 +1,4 @@
-namespace EmployeeDocumentsViewer.Features.Documents.Read.List;
+namespace EmployeeDocumentsViewer.Features.Documents.List;
 
 internal static class Mappings
 {

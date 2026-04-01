@@ -1,4 +1,4 @@
-namespace EmployeeDocumentsViewer.Features.Documents.Read.GetByBlobName;
+namespace EmployeeDocumentsViewer.Features.Documents.Open;
 
 public sealed class Request
 {

@@ -157,7 +157,7 @@
                     render: function (data, type, row) {
                         const company = encodeURIComponent(row.companyKey);
                         const blobName = encodeURIComponent(data);
-                        return `<a href="/api/documents/read/GetByBlobName/${company}?blobName=${blobName}" target="_blank" rel="noopener">Open PDF</a>`;
+                        return `<a href="/api/documents/open/${company}?blobName=${blobName}" target="_blank" rel="noopener">Open PDF</a>`;
                     }
                 }
             ]

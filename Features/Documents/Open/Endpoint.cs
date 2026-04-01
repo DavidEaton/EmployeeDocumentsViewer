@@ -1,13 +1,13 @@
 using FastEndpoints;
 
-namespace EmployeeDocumentsViewer.Features.Documents.Read.GetByBlobName;
+namespace EmployeeDocumentsViewer.Features.Documents.Open;
 
 public sealed class Endpoint(IDocumentRepository repository)
     : Endpoint<Request>
 {
     public override void Configure()
     {
-        Get("/api/documents/read/GetByBlobName/{companyKey}");
+        Get("/api/documents/open/{companyKey}");
         Policies("InternalUsers");
     }
 

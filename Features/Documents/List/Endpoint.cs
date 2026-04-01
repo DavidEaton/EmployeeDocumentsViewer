@@ -1,7 +1,6 @@
-using EmployeeDocumentsViewer.Features;
 using FastEndpoints;
 
-namespace EmployeeDocumentsViewer.Features.Documents.Read.List;
+namespace EmployeeDocumentsViewer.Features.Documents.List;
 
 public sealed class Endpoint(IDocumentRepository repository)
     : Endpoint<Request, Response>
