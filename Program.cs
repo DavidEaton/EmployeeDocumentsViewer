@@ -42,6 +42,20 @@ builder.Services.Configure<CompanyConnectionOptions>(
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection(StorageOptions.SectionName));
 
+var companyOptions = builder.Configuration.GetSection("CompanyConnections").Get<CompanyConnectionOptions>();
+
+foreach (var kvp in companyOptions?.Companies ?? [])
+{
+    var key = kvp.Key;
+    var item = kvp.Value;
+
+    Console.WriteLine(
+        $"{key}: SQL={!string.IsNullOrWhiteSpace(item.ConnectionString)}, " +
+        $"Blob={!string.IsNullOrWhiteSpace(item.BlobStorageConnectionString)}, " +
+        $"DisplayName={item.DisplayName}");
+}
+
+
 builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
 builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
 
