@@ -1,19 +1,21 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Options; 
+using Microsoft.Extensions.Options;
 
 namespace EmployeeDocumentsViewer.Security;
 
 public sealed class DevAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
-    ILoggerFactory logger,
-    UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    ILoggerFactory loggerFactory,
+    UrlEncoder encoder) : AuthenticationHandler<AuthenticationSchemeOptions>(options, loggerFactory, encoder)
 {
     public const string SchemeName = "DevAuth";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        Logger.LogDebug("Authenticating request using {SchemeName}. Path={Path}", SchemeName, Request.Path);
+
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, "dev-user-1"),
@@ -25,6 +27,8 @@ public sealed class DevAuthHandler(
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);
+
+        Logger.LogDebug("Development authentication succeeded for {UserName}.", principal.Identity?.Name);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }

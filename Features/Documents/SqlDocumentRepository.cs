@@ -11,10 +11,12 @@ namespace EmployeeDocumentsViewer.Features.Documents;
 
 public sealed partial class SqlDocumentRepository(
     ICompanyConnectionStringResolver connectionResolver,
-    IOptions<StorageOptions> storageOptions)
+    IOptions<StorageOptions> storageOptions,
+    ILogger<SqlDocumentRepository> logger)
     : IDocumentRepository
 {
     private readonly string _documentsContainerName = storageOptions.Value.DocumentsContainerName;
+    private readonly ILogger<SqlDocumentRepository> _logger = logger;
 
     public async Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentRecord> Items)> SearchAsync(
         Company company,
@@ -25,11 +27,30 @@ public sealed partial class SqlDocumentRepository(
         int length,
         CancellationToken cancellationToken)
     {
+        using var scope = _logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["Company"] = company.ToString(),
+            ["SearchTerm"] = searchTerm,
+            ["SortColumn"] = sortColumn,
+            ["SortDirection"] = sortDirection,
+            ["Start"] = start,
+            ["Length"] = length
+        });
+
+        _logger.LogInformation(
+            "Searching documents for company {Company}. Start={Start}, Length={Length}, Sort={SortColumn} {SortDirection}.",
+            company, start, length, sortColumn, sortDirection);
+
         var employees = await LoadEmployeesAsync(company, cancellationToken);
+        _logger.LogDebug("Loaded {EmployeeCount} employees from SQL for company {Company}.", employees.Count, company);
+
         if (employees.Count == 0)
             return (0, 0, []);
 
         var blobs = await LoadDocumentBlobsAsync(company, cancellationToken);
+
+        _logger.LogDebug("Loaded {BlobCount} candidate blobs from container {ContainerName} for company {Company}.",
+            blobs.Count, _documentsContainerName, company);
 
         var joined = blobs
             .Select(blob => TryCreateRecord(blob, employees))
@@ -72,6 +93,10 @@ public sealed partial class SqlDocumentRepository(
             .Take(length <= 0 ? 10 : length)
             .ToArray();
 
+        _logger.LogInformation(
+            "Document search complete for company {Company}. Total={TotalCount}, Filtered={FilteredCount}, Returned={ReturnedCount}.",
+            company, totalCount, filteredCount, page.Length);
+
         return (totalCount, filteredCount, page);
     }
 
@@ -91,13 +116,25 @@ public sealed partial class SqlDocumentRepository(
         {
             exists = await blobClient.ExistsAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (RequestFailedException)
+        catch (RequestFailedException ex)
         {
+            _logger.LogError(ex,
+                "Blob existence check failed for company {Company}, blob {BlobName}.",
+                company, blobName);
             return null;
         }
 
         if (!exists.Value)
+        {
+            _logger.LogWarning(
+                "Blob not found for company {Company}, blob {BlobName}.",
+                company, blobName);
             return null;
+        }
+
+        _logger.LogInformation(
+            "Opening blob {BlobName} for company {Company}.",
+            blobName, company);
 
         var download = await blobClient
             .DownloadStreamingAsync(cancellationToken: cancellationToken)
@@ -117,81 +154,116 @@ public sealed partial class SqlDocumentRepository(
     }
 
     private async Task<Dictionary<int, EmployeeLookup>> LoadEmployeesAsync(
-        Company company,
-        CancellationToken cancellationToken)
+    Company company,
+    CancellationToken cancellationToken)
     {
         const string sql = """
-            select
-                emp.Id,
-                emp.NameLastFirst,
-                emp.HomeDepartment,
-                emp.Active,
-                term.TerminationDate
-            from Common.EmployeeEeDocsLookup emp
-            outer apply
-            (
-                select top (1)
-                    tm.TerminationDate
-                from HR.Terminations tm
-                where tm.PartyID = emp.Id
-                order by tm.TerminationDate desc
-            ) term
-            order by emp.Id;
-            """;
+        select
+            emp.Id,
+            emp.NameLastFirst,
+            emp.HomeDepartment,
+            emp.Active,
+            term.TerminationDate
+        from Common.EmployeeEeDocsLookup emp
+        outer apply
+        (
+            select top (1)
+                tm.TerminationDate
+            from HR.Terminations tm
+            where tm.PartyID = emp.Id
+            order by tm.TerminationDate desc
+        ) term
+        order by emp.Id;
+        """;
 
-        var result = new Dictionary<int, EmployeeLookup>();
-
-        await using var connection = new SqlConnection(connectionResolver.GetSqlConnectionString(company));
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-
-        await using var command = new SqlCommand(sql, connection)
+        try
         {
-            CommandType = CommandType.Text
-        };
+            var result = new Dictionary<int, EmployeeLookup>();
 
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            var id = reader.GetInt32(reader.GetOrdinal("Id"));
+            await using var connection = new SqlConnection(connectionResolver.GetSqlConnectionString(company));
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            var employee = new EmployeeLookup(
-                Id: id,
-                Name: reader["NameLastFirst"] as string ?? string.Empty,
-                Department: reader["HomeDepartment"] as string ?? string.Empty,
-                Active: reader["Active"] is bool active && active,
-                TerminationDate: reader["TerminationDate"] is DBNull
-                    ? null
-                    : (DateTime?)reader["TerminationDate"]);
+            await using var command = new SqlCommand(sql, connection)
+            {
+                CommandType = CommandType.Text
+            };
 
-            result[id] = employee;
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var id = reader.GetInt32(reader.GetOrdinal("Id"));
+
+                var employee = new EmployeeLookup(
+                    Id: id,
+                    Name: reader["NameLastFirst"] as string ?? string.Empty,
+                    Department: reader["HomeDepartment"] as string ?? string.Empty,
+                    Active: reader["Active"] is bool active && active,
+                    TerminationDate: reader["TerminationDate"] is DBNull
+                        ? null
+                        : (DateTime?)reader["TerminationDate"]);
+
+                result[id] = employee;
+            }
+
+            _logger.LogInformation(
+                "Loaded {EmployeeCount} employees from SQL for company {Company}.",
+                result.Count, company);
+
+            return result;
         }
-
-        return result;
+        catch (SqlException ex)
+        {
+            _logger.LogError(ex,
+                "SQL load failed while loading employees for company {Company}.",
+                company);
+            throw;
+        }
     }
 
     private async Task<IReadOnlyList<BlobLookup>> LoadDocumentBlobsAsync(
-        Company company,
-        CancellationToken cancellationToken)
+    Company company,
+    CancellationToken cancellationToken)
     {
         var container = CreateDocumentsContainerClient(company);
         var items = new List<BlobLookup>();
+        var skippedBlobCount = 0;
 
-        await foreach (var blobItem in container.GetBlobsAsync(cancellationToken: cancellationToken))
+        try
         {
-            if (!TryParseEmployeeDocumentBlobName(blobItem.Name, out var employeeId, out var documentTypeToken))
-                continue;
+            await foreach (var blobItem in container.GetBlobsAsync(cancellationToken: cancellationToken))
+            {
+                if (!TryParseEmployeeDocumentBlobName(blobItem.Name, out var employeeId, out var documentTypeToken))
+                {
+                    skippedBlobCount++;
+                    _logger.LogDebug(
+                        "Skipping blob with unexpected name format in company {Company}: {BlobName}",
+                        company, blobItem.Name);
+                    continue;
+                }
 
-            var updatedUtc = TryGetUpdatedDate(blobItem.Metadata, blobItem.Properties.LastModified);
+                var updatedUtc = TryGetUpdatedDate(blobItem.Metadata, blobItem.Properties.LastModified);
 
-            items.Add(new BlobLookup(
-                BlobName: blobItem.Name,
-                EmployeeId: employeeId,
-                DocumentTypeToken: documentTypeToken,
-                UpdatedUtc: updatedUtc,
-                ContentType: blobItem.Properties.ContentType));
+                items.Add(new BlobLookup(
+                    BlobName: blobItem.Name,
+                    EmployeeId: employeeId,
+                    DocumentTypeToken: documentTypeToken,
+                    UpdatedUtc: updatedUtc,
+                    ContentType: blobItem.Properties.ContentType));
+            }
+
+            _logger.LogInformation(
+                "Enumerated {BlobCount} document blobs for company {Company}. Skipped={SkippedBlobCount}.",
+                items.Count, company, skippedBlobCount);
+
+            return items;
         }
-
-        return items;
+        catch (RequestFailedException ex)
+        {
+            _logger.LogError(ex,
+                "Blob enumeration failed for company {Company}, container {ContainerName}.",
+                company, _documentsContainerName);
+            throw;
+        }
     }
 
     private DocumentRecord? TryCreateRecord(

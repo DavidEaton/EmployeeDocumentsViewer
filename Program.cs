@@ -4,8 +4,19 @@ using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Logging
+builder.Logging.ClearProviders();
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.SingleLine = true;
+    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff zzz ";
+    options.IncludeScopes = true;
+});
+builder.Logging.AddDebug();
 
 builder.Services.AddRazorPages();
 builder.Services.AddFastEndpoints();
@@ -42,20 +53,6 @@ builder.Services.Configure<CompanyConnectionOptions>(
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection(StorageOptions.SectionName));
 
-var companyOptions = builder.Configuration.GetSection("CompanyConnections").Get<CompanyConnectionOptions>();
-
-foreach (var kvp in companyOptions?.Companies ?? [])
-{
-    var key = kvp.Key;
-    var item = kvp.Value;
-
-    Console.WriteLine(
-        $"{key}: SQL={!string.IsNullOrWhiteSpace(item.ConnectionString)}, " +
-        $"Blob={!string.IsNullOrWhiteSpace(item.BlobStorageConnectionString)}, " +
-        $"DisplayName={item.DisplayName}");
-}
-
-
 builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
 builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
 
@@ -70,6 +67,23 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("RequestScope");
+
+    using (logger.BeginScope(new Dictionary<string, object?>
+    {
+        ["TraceIdentifier"] = context.TraceIdentifier,
+        ["RequestPath"] = context.Request.Path.Value,
+        ["RequestMethod"] = context.Request.Method
+    }))
+    {
+        await next();
+    }
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseFastEndpoints();
