@@ -1,12 +1,14 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using EmployeeDocumentsViewer.Configuration;
+using EmployeeDocumentsViewer.Features;
 using EmployeeDocumentsViewer.Features.Documents;
+using EmployeeDocumentsViewer.Features.Documents.Indexing;
 using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
-using Azure.Monitor.OpenTelemetry.AspNetCore;
-using System.Text.Json;
-using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,11 +20,12 @@ builder.Logging.AddSimpleConsole(options =>
     options.IncludeScopes = true;
 });
 builder.Logging.AddDebug();
-// Temporary verification
-var aiConnectionString = builder.Configuration.GetConnectionString("ApplicationInsights")
+
+var applicationInsightsConnectionString =
+    builder.Configuration.GetConnectionString("ApplicationInsights")
     ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
 
-if (string.IsNullOrWhiteSpace(aiConnectionString))
+if (string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
 {
     throw new InvalidOperationException(
         "Application Insights connection string is missing. " +
@@ -32,14 +35,15 @@ if (string.IsNullOrWhiteSpace(aiConnectionString))
 builder.Services.AddOpenTelemetry()
     .UseAzureMonitor(options =>
     {
-        // Option 1: Use appsettings.json
-        options.ConnectionString = builder.Configuration.GetConnectionString("ApplicationInsights");
-        // Option 2: Or environment variable in Azure
-        // APPLICATIONINSIGHTS_CONNECTION_STRING
+        options.ConnectionString = builder.Environment.IsProduction()
+            ? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")
+                ?? applicationInsightsConnectionString
+            : applicationInsightsConnectionString;
     });
 
 builder.Services.AddRazorPages();
 builder.Services.AddFastEndpoints();
+
 builder.Services.SwaggerDocument(options =>
 {
     options.DocumentSettings = settings =>
@@ -63,7 +67,9 @@ builder.Services.AddAuthorizationBuilder()
     });
 
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+});
 
 builder.Services.Configure<CompanyConnectionOptions>(
     builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
@@ -71,10 +77,13 @@ builder.Services.Configure<CompanyConnectionOptions>(
 builder.Services.Configure<StorageOptions>(
     builder.Configuration.GetSection(StorageOptions.SectionName));
 
-builder.Services.AddSingleton<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
-builder.Services.AddSingleton<IDocumentRepository, SqlDocumentRepository>();
+builder.Services.AddScoped<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
+builder.Services.AddScoped<IDocumentRepository, SqlDocumentRepository>();
+builder.Services.AddScoped<IDocumentCatalogIndexer, SqlDocumentCatalogIndexer>();
 
 var app = builder.Build();
+
+await RunDocumentCatalogIndexingOnceAtStartupAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -103,6 +112,7 @@ app.Use(async (context, next) =>
 });
 
 app.UseRouting();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -119,3 +129,43 @@ app.MapRazorPages().WithStaticAssets();
 app.MapGet("/", () => Results.LocalRedirect("/documents"));
 
 app.Run();
+
+static async Task RunDocumentCatalogIndexingOnceAtStartupAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+
+    var logger = scope.ServiceProvider
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("StartupIndexing");
+
+    var indexer = scope.ServiceProvider.GetRequiredService<IDocumentCatalogIndexer>();
+
+    logger.LogInformation("Starting one-time document catalog indexing.");
+
+    foreach (var company in Enum.GetValues<Company>())
+    {
+        try
+        {
+            logger.LogInformation(
+                "Indexing document catalog for company {Company}.",
+                company);
+
+            await indexer.SyncCompanyAsync(company, CancellationToken.None);
+
+            logger.LogInformation(
+                "Completed document catalog indexing for company {Company}.",
+                company);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(
+                ex,
+                "Document catalog indexing failed for company {Company}.",
+                company);
+
+            throw;
+        }
+    }
+
+    logger.LogInformation("One-time document catalog indexing completed.");
+}

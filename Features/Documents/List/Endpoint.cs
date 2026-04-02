@@ -1,57 +1,42 @@
 using FastEndpoints;
 
-namespace EmployeeDocumentsViewer.Features.Documents.List
+namespace EmployeeDocumentsViewer.Features.Documents.List;
+
+public sealed class Endpoint(IDocumentRepository repository)
+    : Endpoint<Request, Response>
 {
-    public sealed class Endpoint(
-        IDocumentRepository repository,
-        ILogger<Endpoint> logger)
-        : Endpoint<Request, Response>
+    private readonly IDocumentRepository _repository = repository;
+
+    public override void Configure()
     {
-        public override void Configure()
+        Post("/api/documents/list");
+        Policies("InternalUsers");
+    }
+
+    public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
+    {
+        var company = Enum.Parse<Company>(request.CompanyKey, ignoreCase: true);
+
+        var sortColumn = DocumentSortParser.ParseOrDefault(request.SortColumn);
+        var descending = DocumentSortParser.IsDescending(request.SortDirection);
+
+        var (totalCount, filteredCount, items) = await _repository.SearchAsync(
+            company,
+            request.SearchTerm,
+            sortColumn,
+            descending,
+            request.Start,
+            request.Length,
+            cancellationToken);
+
+        var response = new Response
         {
-            Post("/api/documents/list");
-            Policies("InternalUsers");
-        }
+            Draw = request.Draw,
+            RecordsTotal = totalCount,
+            RecordsFiltered = filteredCount,
+            Data = items
+        };
 
-        public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
-        {
-            using var scope = logger.BeginScope(new Dictionary<string, object?>
-            {
-                ["CompanyKey"] = request.CompanyKey,
-                ["Draw"] = request.Draw
-            });
-
-            if (!Enum.TryParse<Company>(request.CompanyKey, ignoreCase: true, out var company))
-            {
-                logger.LogWarning("Invalid company key supplied to document list endpoint: {CompanyKey}", request.CompanyKey);
-                await Send.NotFoundAsync(cancellationToken);
-                return;
-            }
-
-            logger.LogInformation(
-                "Handling document list request for company {Company}. Start={Start}, Length={Length}.",
-                company, request.Start, request.Length);
-
-            var (totalCount, filteredCount, items) = await repository.SearchAsync(
-                company,
-                request.SearchTerm,
-                request.SortColumn,
-                request.SortDirection,
-                request.Start,
-                request.Length,
-                cancellationToken);
-
-            logger.LogInformation(
-                "Document list request completed for company {Company}. Total={TotalCount}, Filtered={FilteredCount}, Returned={ReturnedCount}.",
-                company, totalCount, filteredCount, items.Count);
-
-            await Send.OkAsync(new Response
-            {
-                Draw = request.Draw,
-                RecordsTotal = totalCount,
-                RecordsFiltered = filteredCount,
-                Data = items.Select(x => x.ToReadRow(request.CompanyKey)).ToArray()
-            }, cancellationToken);
-        }
+        await Send.OkAsync(response, cancellation: cancellationToken);
     }
 }

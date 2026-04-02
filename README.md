@@ -1,302 +1,333 @@
-Employee Documents Viewer
-=========================
+# Employee Documents Viewer
 
-A lightweight internal web application for securely browsing and opening employee documents from Azure blob storage.
+A lightweight internal web application for securely browsing and opening employee documents stored in Azure Blob Storage.
 
-The application presents a searchable, sortable grid of documents. Each row contains a hyperlink that opens the document (PDF) directly from the server.
+The application presents a searchable, sortable grid backed by a **SQL-based document catalog index**, ensuring fast and responsive user interaction even with large document sets.
 
-This project demonstrates a simple architecture for serving document metadata from a database while streaming the document content through a secure API endpoint.
+Documents are **indexed into SQL for querying** and **streamed from Blob Storage for retrieval**.
 
-* * *
+---
 
-Architecture Overview
-=====================
+## Architecture Overview
 
-The application consists of three primary layers:
+The application consists of five logical layers:
 
-Browser (DataTables UI)  
-        │  
-        ▼  
-Razor Pages UI  
-        │  
-        ▼  
-FastEndpoints API  
-        │  
-        ▼  
-Repository  
-        │ │  
-        ▼▼  
-Document Storage (Azure Blob Storage) | Employe Data (Azure SQL Database)
+Browser (DataTables UI)
+│
+▼
+Razor Pages UI
+│
+▼
+FastEndpoints API
+│
+▼
+Repository (SQL-backed query engine)
+│
+▼
+Document Catalog (Azure SQL)
+│
+▼
+Azure Blob Storage (file content only)
 
-### UI Layer
+---
+
+## Key Architectural Principle
+
+**Blob Storage is not used as a query engine.**
+
+Instead:
+
+* Azure SQL stores a **document catalog index**
+* The UI queries SQL for fast paging/filtering/sorting
+* Blob Storage is used **only when opening a document**
+
+This eliminates expensive container scans and enables sub-second response times even with large datasets (e.g., 60k+ documents).
+
+---
+
+## UI Layer
 
 * ASP.NET Core **Razor Pages**
 
-* **DataTables** grid for sorting, searching, and paging
+* **DataTables** grid (server-side mode)
 
-* Each row contains a link that opens a document
-
-### API Layer
-
-* **FastEndpoints** is used for HTTP endpoints
-
-* Endpoints enforce authorization policies
-
-* Endpoints return either:
+* Fully supports:
   
-  * JSON (for the document list)
+  * paging
+  * sorting
+  * searching
+
+Each row links to a document served via the API.
+
+---
+
+## API Layer
+
+* Built using **FastEndpoints**
+
+* Enforces authorization policies
+
+* Returns:
   
-  * a streamed PDF file
+  * JSON (document metadata)
+  * streamed file responses (PDF, images, etc.)
 
-### Data Layer
+---
 
-Reads metadata from **Azure SQL Database**
+## Data Layer
 
+### Document Catalog (Azure SQL)
 
-Document files themselves are stored in **Azure Blob Storage**
+Primary query source for the application.
 
-Key Features
-============
+Stores indexed metadata:
 
-* Server-side paging, sorting, and filtering
+* BlobName
+* EmployeeId
+* DocumentType
+* Department (via join)
+* Updated date
+* Active / terminated status
 
-* FastEndpoints vertical-slice architecture
+This enables efficient:
 
-* Secure document streaming
+* filtering
+* sorting
+* paging
+* searching
 
+### Document Storage (Azure Blob Storage)
+
+Stores the actual document files.
+
+Access pattern:
+
+* No listing or querying at runtime
+* Files retrieved **only when requested**
+
+---
+
+## Document Indexing
+
+A background indexing process synchronizes Blob Storage with the SQL catalog.
+
+### Responsibilities
+
+* Enumerates blobs in the container
+* Parses blob names into structured metadata
+* Computes a SHA-256 hash for stable indexing
+* Upserts records into SQL
+* Marks deleted blobs as inactive
+
+### Key Design Detail
+
+Because blob names can exceed SQL index size limits:
+
+* A **SHA-256 hash (BlobNameHash)** is used for indexing
+
+* Full blob name is still stored for correctness
+
+* Matching uses:
+  
+  * CompanyKey
+  * BlobNameHash
+  * BlobName
+
+---
+
+## Key Features
+
+* Fast server-side paging, sorting, and filtering
+* SQL-backed document catalog index
+* Secure document streaming (no direct blob exposure)
+* Vertical-slice architecture (FastEndpoints)
 * Swagger UI for API testing
-
-* Simple Razor Pages UI
-
 * Minimal infrastructure requirements
 
-Technology Stack
-================
+---
 
-| Technology        | Purpose                       |
-| ----------------- | ----------------------------- |
-| ASP.NET Core      | Web application framework     |
-| Razor Pages       | UI framework                  |
-| FastEndpoints     | API endpoint framework        |
-| DataTables        | Interactive data grid         |
-| Swagger / OpenAPI | API testing and documentation |
-| Bootstrap         | Basic styling                 |
-| Azure Storage     | Secure Document storage (cloud)|
-| Azure SQL Database| Employee data                 |
+## Technology Stack
 
+| Technology         | Purpose                          |
+| ------------------ | -------------------------------- |
+| ASP.NET Core       | Web application framework        |
+| Razor Pages        | UI framework                     |
+| FastEndpoints      | API endpoint framework           |
+| DataTables         | Interactive data grid            |
+| Swagger / OpenAPI  | API testing and documentation    |
+| Bootstrap          | UI styling                       |
+| Azure SQL          | Document catalog + employee data |
+| Azure Blob Storage | Document storage                 |
 
-* * *
+---
 
-Project Structure
-=================
+## Project Structure
 
-EmployeeDocumentsViewer  
-│  
-├─ Features  
-│   └─ Documents  
-│       └─ Read  
-│           ├─ List  
-│           │   ├─ Endpoint.cs  
-│           │   ├─ Request.cs  
-│           │   └─ Response.cs  
-│           │  
-│           └─ GetById  
-│               ├─ Endpoint.cs  
-│               └─ Request.cs  
-│  
-├─ Pages  
-│   └─ Documents  
-│       ├─ Index.cshtml  
-│       └─ Index.cshtml.cs  
-│  
-├─ Security  
-│   └─ DevAuthHandler.cs  
-│  
-├─ Common  
-│  
+EmployeeDocumentsViewer
+│
+├─ Features
+│   └─ Documents
+│       ├─ Indexing
+│       │   ├─ IDocumentCatalogIndexer.cs
+│       │   ├─ SqlDocumentCatalogIndexer.cs
+│       │   └─ DocumentCatalogSyncBackgroundService.cs
+│       │
+│       ├─ Read
+│       │   ├─ List
+│       │   │   ├─ Endpoint.cs
+│       │   │   ├─ Request.cs
+│       │   │   └─ Response.cs
+│       │   │
+│       │   └─ GetByBlobName
+│       │       ├─ Endpoint.cs
+│       │       └─ Request.cs
+│       │
+│       ├─ SqlDocumentRepository.cs
+│       └─ DocumentBlobNameParser.cs
+│
+├─ Pages
+│   └─ Documents
+│       ├─ Index.cshtml
+│       └─ Index.cshtml.cs
+│
+├─ Security
+│   └─ DevAuthHandler.cs
+│
 └─ Program.cs
 
-This structure follows a **vertical slice architecture**, where each feature contains its own endpoint, request contract, and response contract.
+---
 
-* * *
+## API Endpoints
 
-API Endpoints
-=============
-
-List Documents
---------------
+### List Documents
 
 POST /api/documents/list
 
-Returns paginated document metadata used by the grid.
+Returns paginated document metadata from SQL.
 
-Example response:
+---
 
-```json
-{  
-  "draw": 1,  
-  "recordsTotal": 4,  
-  "recordsFiltered": 4,  
-  "data": [  
-    {  
-      "documentId": 1,  
-      "employee": "Alice Carter",  
-      "department": "HR",  
-      "documentType": "Policy",  
-      "year": 2026  
-    }  
-  ]  
-}
-```
+### Open Document
 
-* * *
+GET /api/documents/read/getbyblobname/{companyKey}?blobName={blobName}
 
-Open Document
--------------
+Streams the file directly from Azure Blob Storage.
 
-`GET /api/documents/read/getbyblobname/{companyKey}?blobName={blobName}`
+---
 
-Streams the PDF document associated with the specified ID.
+## Running the Application
 
-Example:
+### Requirements
 
-`GET /api/documents/read/getbyblobname/CII?blobName=123_W4.pdf`
+* .NET 10+
+* Azure SQL database
+* Azure Storage account
 
-Returns
+---
 
-`Content-Type: application/pdf`
-
-* * *
-
-Running the Application
-=======================
-
-Requirements
-------------
-
-* .NET 8+
-
-* Node.js not required
-
-* Docker optional
-
-* * *
-
-Run Locally
------------
+### Run Locally
 
 ```bash
-dotnet restore  
-dotnet build  
+dotnet restore
+dotnet build
 dotnet run
 ```
 
-The application will start at:
+Application URL:
 
-`http://localhost:5129`
+https://localhost:7043/documents
 
-Open:
+---
 
-`http://localhost:5129/documents`
+## Swagger UI
 
-* * *
+Available in development:
 
-Swagger UI
-==========
+http://localhost:7043/swagger
 
-Swagger UI is available in development mode.
+---
 
-`http://localhost:5129/swagger`
+## Development Authentication
 
-It allows testing the API endpoints directly.
+Uses:
 
-* * *
+DevAuthHandler
 
-Development Authentication
-==========================
+Automatically injects:
 
-The project includes a development authentication handler:
+employee_portal = true
 
-`DevAuthHandler`
+Production uses Azure Entra ID.
 
-This automatically authenticates requests with the required claim:
+---
 
-`employee_portal = true`
+## Database Schema
 
-This simplifies development by avoiding external identity providers.
+The document catalog table:
 
-In production, replaced with **Azure Entra Identity**
+Common.EmployeeDocumentCatalog
 
-Data Source
-===========
+Key columns:
 
-The demo repository (`InMemoryDocumentRepository`) returns example data.
+* Id (clustered PK)
+* CompanyKey
+* BlobName
+* BlobNameHash (SHA-256)
+* EmployeeId
+* DocumentTypeDisplay
+* UpdatedUtc
+* IsDeleted
 
-Example documents:
+Indexes enable fast lookup and filtering.
 
-| Employee     | Department | Document       |
-| ------------ | ---------- | -------------- |
-| Alice Carter | HR         | Policy         |
-| Bob Evans    | Finance    | Contract       |
-| Carla Jones  | IT         | Handbook       |
-| David Smith  | HR         | Benefits Guide |
+---
 
-Replace the repository implementation to connect to your real database.
+## Performance Characteristics
 
-* * *
+### Previous design (deprecated)
 
-Production Architecture Example
-===============================
+* Full blob container scan per request
+* In-memory filtering and sorting
+* Poor scalability
 
-A typical production deployment might look like:
+### Current design
 
-Users  
-  │  
-  ▼  
-Internal Web App  
-  │  
-  ▼  
-Azure App Service  
-  │  
-  ├── Azure SQL Database (document metadata)  
-  │  
-  └── Azure Blob Storage (PDF files)
+* SQL-based paging/filtering/sorting
+* Constant-time query performance
+* Blob access only on demand
 
-The application retrieves metadata from the database and streams documents from blob storage through the API endpoint.
+---
 
-Security Considerations
-=======================
+## Production Architecture Example
 
-Production practices:
+Users
+│
+▼
+Internal Web App
+│
+▼
+Azure App Service
+│
+├── Azure SQL Database (document catalog + employee data)
+│
+└── Azure Blob Storage (documents)
 
-* Uses Azure Entra for Identity
+---
 
-* Stores documents in private blob containers
+## Security Considerations
 
-* Streams files through the API instead of exposing direct blob URLs to clients
+* Azure Entra authentication
+* Private blob containers
+* No direct blob URLs exposed
+* Files streamed through API
+* Swagger disabled in production
+  
+  
 
-* Restricts Swagger UI to development environments
+---
 
-Feature Roadmap
-===================
-
-Planned enhancements:
-
-* Azure SQL integration
-
-* Azure Blob Storage integration
-
-* role-based access control
-
-Potential upgrades:
-
-* document preview
-
-* audit logging
-
-* document upload capability
-
-License
-=======
+## License
 
 Internal use only.
+
+

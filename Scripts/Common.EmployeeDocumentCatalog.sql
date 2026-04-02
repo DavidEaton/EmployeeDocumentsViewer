@@ -1,0 +1,46 @@
+if object_id('Common.EmployeeDocumentCatalog', 'U') is not null
+begin
+    drop table Common.EmployeeDocumentCatalog;
+end
+go
+
+create table Common.EmployeeDocumentCatalog
+(
+    Id                      bigint              not null identity(1,1),
+    CompanyKey              varchar(10)         not null,
+    BlobName                nvarchar(512)       not null,
+    BlobNameHash            varbinary(32)       not null,
+    EmployeeId              int                 not null,
+    DocumentTypeToken       nvarchar(200)       not null,
+    DocumentTypeDisplay     nvarchar(200)       not null,
+    UpdatedUtc              datetimeoffset(7)   null,
+    BlobLastModifiedUtc     datetimeoffset(7)   null,
+    ContentType             nvarchar(200)       null,
+    BlobETag                nvarchar(128)       null,
+    IsDeleted               bit                 not null
+        constraint DF_EmployeeDocumentCatalog_IsDeleted default (0),
+    LastIndexedUtc          datetimeoffset(7)   not null,
+    constraint PK_EmployeeDocumentCatalog
+        primary key clustered (Id)
+);
+go
+
+create unique nonclustered index UX_EmployeeDocumentCatalog_Company_BlobHash
+    on Common.EmployeeDocumentCatalog (CompanyKey, BlobNameHash);
+go
+
+create index IX_EmployeeDocumentCatalog_Company_Employee
+    on Common.EmployeeDocumentCatalog (CompanyKey, EmployeeId);
+go
+
+create index IX_EmployeeDocumentCatalog_Company_DocumentType
+    on Common.EmployeeDocumentCatalog (CompanyKey, DocumentTypeDisplay);
+go
+
+create index IX_EmployeeDocumentCatalog_Company_UpdatedUtc
+    on Common.EmployeeDocumentCatalog (CompanyKey, UpdatedUtc desc);
+go
+
+create index IX_EmployeeDocumentCatalog_Company_IsDeleted
+    on Common.EmployeeDocumentCatalog (CompanyKey, IsDeleted);
+go
