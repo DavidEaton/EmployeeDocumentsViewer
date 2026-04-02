@@ -126,7 +126,7 @@ API Endpoints
 List Documents
 --------------
 
-POST /api/documents/read/list
+POST /api/documents/list
 
 Returns paginated document metadata used by the grid.
 

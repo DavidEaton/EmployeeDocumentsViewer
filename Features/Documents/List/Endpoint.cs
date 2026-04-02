@@ -9,7 +9,7 @@ namespace EmployeeDocumentsViewer.Features.Documents.List
     {
         public override void Configure()
         {
-            Post("/api/documents/read/list");
+            Post("/api/documents/list");
             Policies("InternalUsers");
         }
 
