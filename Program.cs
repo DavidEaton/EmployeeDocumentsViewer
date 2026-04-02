@@ -4,11 +4,12 @@ using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Logging.Console;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
+using System.Text.Json;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Logging
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(options =>
 {
@@ -17,6 +18,25 @@ builder.Logging.AddSimpleConsole(options =>
     options.IncludeScopes = true;
 });
 builder.Logging.AddDebug();
+// Temporary verification
+var aiConnectionString = builder.Configuration.GetConnectionString("ApplicationInsights")
+    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+
+if (string.IsNullOrWhiteSpace(aiConnectionString))
+{
+    throw new InvalidOperationException(
+        "Application Insights connection string is missing. " +
+        "Set ConnectionStrings:ApplicationInsights in user secrets or APPLICATIONINSIGHTS_CONNECTION_STRING.");
+}
+
+builder.Services.AddOpenTelemetry()
+    .UseAzureMonitor(options =>
+    {
+        // Option 1: Use appsettings.json
+        options.ConnectionString = builder.Configuration.GetConnectionString("ApplicationInsights");
+        // Option 2: Or environment variable in Azure
+        // APPLICATIONINSIGHTS_CONNECTION_STRING
+    });
 
 builder.Services.AddRazorPages();
 builder.Services.AddFastEndpoints();
@@ -43,9 +63,7 @@ builder.Services.AddAuthorizationBuilder()
     });
 
 builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-});
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
 builder.Services.Configure<CompanyConnectionOptions>(
     builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
@@ -66,26 +84,28 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-app.UseRouting();
 
 app.Use(async (context, next) =>
 {
-    var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+    var logger = context.RequestServices
+        .GetRequiredService<ILoggerFactory>()
         .CreateLogger("RequestScope");
 
     using (logger.BeginScope(new Dictionary<string, object?>
     {
-        ["TraceIdentifier"] = context.TraceIdentifier,
-        ["RequestPath"] = context.Request.Path.Value,
-        ["RequestMethod"] = context.Request.Method
+        ["TraceId"] = Activity.Current?.TraceId.ToString(),
+        ["Path"] = context.Request.Path.Value,
+        ["Method"] = context.Request.Method
     }))
     {
         await next();
     }
 });
 
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.UseFastEndpoints();
 
 if (app.Environment.IsDevelopment())
@@ -95,6 +115,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();
+
 app.MapGet("/", () => Results.LocalRedirect("/documents"));
 
 app.Run();

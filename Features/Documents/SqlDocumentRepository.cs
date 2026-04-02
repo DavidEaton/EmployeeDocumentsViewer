@@ -132,7 +132,7 @@ public sealed partial class SqlDocumentRepository(
             return null;
         }
 
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Opening blob {BlobName} for company {Company}.",
             blobName, company);
 
@@ -286,8 +286,23 @@ public sealed partial class SqlDocumentRepository(
             ContentType: blob.ContentType);
     }
 
-    private BlobContainerClient CreateDocumentsContainerClient(Company company) =>
-        new(connectionResolver.GetBlobStorageConnectionString(company), _documentsContainerName);
+private BlobContainerClient CreateDocumentsContainerClient(Company company)
+{
+    var connectionString = connectionResolver.GetBlobStorageConnectionString(company);
+
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            $"Blob connection string is empty for {company}");
+    }
+
+    _logger.LogInformation(
+        "Blob connection string present for {Company}. Length={Length}",
+        company,
+        connectionString.Length);
+
+    return new BlobContainerClient(connectionString, _documentsContainerName);
+}
 
     private static IEnumerable<DocumentRecord> ApplySort(
         IEnumerable<DocumentRecord> source,
