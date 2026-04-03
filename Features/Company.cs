@@ -1,5 +1,5 @@
-namespace EmployeeDocumentsViewer.Features
-{
+namespace EmployeeDocumentsViewer.Features;
+
     public enum Company
     {
         CII,
@@ -7,4 +7,3 @@ namespace EmployeeDocumentsViewer.Features
         DSI,
         DSN
     }
-}

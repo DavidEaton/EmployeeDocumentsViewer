@@ -243,7 +243,7 @@ https://localhost:7043/documents
 
 Available in development:
 
-http://localhost:7043/swagger
+https://localhost:7043/swagger
 
 ---
 
