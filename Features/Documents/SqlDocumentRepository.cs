@@ -3,6 +3,7 @@ using Azure.Storage.Blobs;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents.List;
 using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace EmployeeDocumentsViewer.Features.Documents;
 
@@ -23,142 +24,21 @@ public sealed class SqlDocumentRepository(
         CancellationToken cancellationToken)
     {
         var connectionString = _connectionStringResolver.GetSqlConnectionString(company);
-        var orderByClause = BuildOrderByClause(sortColumn, descending);
-        var companyKey = company.ToString();
-
-        var sql = $"""
-        create table #Base
-        (
-            BlobName         nvarchar(512)      not null,
-            EmployeeId       int                not null,
-            Employee         nvarchar(256)      not null,
-            Department       nvarchar(256)      null,
-            DocumentType     nvarchar(200)      not null,
-            [Year]           int                null,
-            UpdatedUtc       datetimeoffset(7)  null,
-            ContentType      nvarchar(200)      null,
-            Active           bit                not null,
-            TerminationDate  datetime           null
-        );
-
-        insert into #Base
-        (
-            BlobName,
-            EmployeeId,
-            Employee,
-            Department,
-            DocumentType,
-            [Year],
-            UpdatedUtc,
-            ContentType,
-            Active,
-            TerminationDate
-        )
-        select
-            d.BlobName,
-            d.EmployeeId,
-            emp.NameLastFirst as Employee,
-            emp.HomeDepartment as Department,
-            d.DocumentTypeDisplay as DocumentType,
-            year(coalesce(d.UpdatedUtc, d.BlobLastModifiedUtc)) as [Year],
-            coalesce(d.UpdatedUtc, d.BlobLastModifiedUtc) as UpdatedUtc,
-            d.ContentType,
-            emp.Active,
-            term.TerminationDate
-        from Common.EmployeeDocumentCatalog d
-        inner join Common.EmployeeEeDocsLookup emp
-            on emp.Id = d.EmployeeId
-        outer apply
-        (
-            select top (1)
-                tm.TerminationDate
-            from HR.Terminations tm
-            where tm.PartyID = emp.Id
-            order by tm.TerminationDate desc
-        ) term
-        where
-            d.CompanyKey = @CompanyKey
-            and d.IsDeleted = 0;
-
-        create table #Filtered
-        (
-            BlobName         nvarchar(512)      not null,
-            EmployeeId       int                not null,
-            Employee         nvarchar(256)      not null,
-            Department       nvarchar(256)      null,
-            DocumentType     nvarchar(200)      not null,
-            [Year]           int                null,
-            UpdatedUtc       datetimeoffset(7)  null,
-            ContentType      nvarchar(200)      null,
-            Active           bit                not null,
-            TerminationDate  datetime           null
-        );
-
-        insert into #Filtered
-        (
-            BlobName,
-            EmployeeId,
-            Employee,
-            Department,
-            DocumentType,
-            [Year],
-            UpdatedUtc,
-            ContentType,
-            Active,
-            TerminationDate
-        )
-        select
-            BlobName,
-            EmployeeId,
-            Employee,
-            Department,
-            DocumentType,
-            [Year],
-            UpdatedUtc,
-            ContentType,
-            Active,
-            TerminationDate
-        from #Base
-        where
-            @SearchTerm is null
-            or @SearchTerm = N''
-            or Employee like N'%' + @SearchTerm + N'%'
-            or Department like N'%' + @SearchTerm + N'%'
-            or DocumentType like N'%' + @SearchTerm + N'%'
-            or BlobName like N'%' + @SearchTerm + N'%'
-            or cast(EmployeeId as nvarchar(20)) like N'%' + @SearchTerm + N'%'
-            or cast([Year] as nvarchar(10)) like N'%' + @SearchTerm + N'%'
-            or case when Active = 1 then N'Active' else N'Terminated' end like N'%' + @SearchTerm + N'%'
-            or convert(nvarchar(10), TerminationDate, 23) like N'%' + @SearchTerm + N'%';
-
-        select count(*) as TotalCount
-        from #Base;
-
-        select count(*) as FilteredCount
-        from #Filtered;
-
-        select
-            BlobName,
-            EmployeeId,
-            Employee,
-            Department,
-            DocumentType,
-            [Year],
-            UpdatedUtc,
-            ContentType,
-            Active,
-            TerminationDate
-        from #Filtered
-        order by {orderByClause}
-        offset @Start rows fetch next @Length rows only;
-        """;
 
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
 
-        await using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@CompanyKey", companyKey);
+        await using var command = new SqlCommand(
+            "Common.usp_EmployeeDocumentCatalog_Search",
+            connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 60
+        };
+
         command.Parameters.AddWithValue("@SearchTerm", (object?)searchTerm ?? DBNull.Value);
+        command.Parameters.AddWithValue("@SortColumn", sortColumn.ToString());
+        command.Parameters.AddWithValue("@SortDescending", descending);
         command.Parameters.AddWithValue("@Start", start);
         command.Parameters.AddWithValue("@Length", length);
 
@@ -207,6 +87,7 @@ public sealed class SqlDocumentRepository(
 
         return (totalCount, filteredCount, rows);
     }
+
     public async Task<BlobDocumentStream?> OpenReadAsync(
         Company company,
         string blobName,
@@ -250,35 +131,6 @@ public sealed class SqlDocumentRepository(
     {
         var connectionString = _connectionStringResolver.GetBlobStorageConnectionString(company);
         return new BlobContainerClient(connectionString, "hrdocs");
-    }
-
-    private static string BuildOrderByClause(DocumentSortColumn sortColumn, bool descending)
-    {
-        return (sortColumn, descending) switch
-        {
-            (DocumentSortColumn.EmployeeId, false) => "EmployeeId asc",
-            (DocumentSortColumn.EmployeeId, true) => "EmployeeId desc",
-
-            (DocumentSortColumn.Employee, false) => "Employee asc",
-            (DocumentSortColumn.Employee, true) => "Employee desc",
-
-            (DocumentSortColumn.Department, false) => "Department asc",
-            (DocumentSortColumn.Department, true) => "Department desc",
-
-            (DocumentSortColumn.DocumentType, false) => "DocumentType asc",
-            (DocumentSortColumn.DocumentType, true) => "DocumentType desc",
-
-            (DocumentSortColumn.Year, false) => "[Year] asc",
-            (DocumentSortColumn.Year, true) => "[Year] desc",
-
-            (DocumentSortColumn.Active, false) => "Active asc",
-            (DocumentSortColumn.Active, true) => "Active desc",
-
-            (DocumentSortColumn.TerminationDate, false) => "TerminationDate asc",
-            (DocumentSortColumn.TerminationDate, true) => "TerminationDate desc",
-
-            _ => "UpdatedUtc desc, Employee asc"
-        };
     }
 
     private static string GetContentTypeFromFileName(string blobName)

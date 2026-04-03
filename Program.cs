@@ -2,9 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using EmployeeDocumentsViewer.Configuration;
-using EmployeeDocumentsViewer.Features;
 using EmployeeDocumentsViewer.Features.Documents;
-using EmployeeDocumentsViewer.Features.Documents.Indexing;
 using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -67,9 +65,7 @@ builder.Services.AddAuthorizationBuilder()
     });
 
 builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-});
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
 builder.Services.Configure<CompanyConnectionOptions>(
     builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
@@ -79,11 +75,8 @@ builder.Services.Configure<StorageOptions>(
 
 builder.Services.AddScoped<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
 builder.Services.AddScoped<IDocumentRepository, SqlDocumentRepository>();
-builder.Services.AddScoped<IDocumentCatalogIndexer, SqlDocumentCatalogIndexer>();
 
 var app = builder.Build();
-
-await RunDocumentCatalogIndexingOnceAtStartupAsync(app);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -112,10 +105,8 @@ app.Use(async (context, next) =>
 });
 
 app.UseRouting();
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.UseFastEndpoints();
 
 if (app.Environment.IsDevelopment())
@@ -129,43 +120,3 @@ app.MapRazorPages().WithStaticAssets();
 app.MapGet("/", () => Results.LocalRedirect("/documents"));
 
 app.Run();
-
-static async Task RunDocumentCatalogIndexingOnceAtStartupAsync(WebApplication app)
-{
-    using var scope = app.Services.CreateScope();
-
-    var logger = scope.ServiceProvider
-        .GetRequiredService<ILoggerFactory>()
-        .CreateLogger("StartupIndexing");
-
-    var indexer = scope.ServiceProvider.GetRequiredService<IDocumentCatalogIndexer>();
-
-    logger.LogInformation("Starting one-time document catalog indexing.");
-
-    foreach (var company in Enum.GetValues<Company>())
-    {
-        try
-        {
-            logger.LogInformation(
-                "Indexing document catalog for company {Company}.",
-                company);
-
-            await indexer.SyncCompanyAsync(company, CancellationToken.None);
-
-            logger.LogInformation(
-                "Completed document catalog indexing for company {Company}.",
-                company);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex,
-                "Document catalog indexing failed for company {Company}.",
-                company);
-
-            throw;
-        }
-    }
-
-    logger.LogInformation("One-time document catalog indexing completed.");
-}
