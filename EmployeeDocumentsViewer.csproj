@@ -1,18 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>813e60bf-98ed-46b0-aebd-80b23dd2e2ba</UserSecretsId>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.4.0" />
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
-    <PackageReference Include="FastEndpoints" Version="8.0.1" />
-    <PackageReference Include="FastEndpoints.Swagger" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
-  </ItemGroup>
-
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<Project Sdk="Microsoft.NET.Sdk.Web">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>813e60bf-98ed-46b0-aebd-80b23dd2e2ba</UserSecretsId>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore"
+                          Version="1.4.0" />
+        <PackageReference Include="Azure.Storage.Blobs"
+                          Version="12.24.0" />
+        <PackageReference Include="FastEndpoints"
+                          Version="8.0.1" />
+        <PackageReference Include="FastEndpoints.Swagger"
+                          Version="8.0.1" />
+        <PackageReference Include="Microsoft.Data.SqlClient"
+                          Version="6.1.4" />
+        <PackageReference Include="Microsoft.Identity.Web"
+                          Version="4.7.0" />
+        <PackageReference Include="Microsoft.Identity.Web.UI"
+                          Version="4.7.0" />
+    </ItemGroup>
 </Project>

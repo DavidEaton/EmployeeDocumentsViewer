@@ -1,12 +1,15 @@
 using System.Diagnostics;
+using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents;
-using EmployeeDocumentsViewer.Security;
 using FastEndpoints;
 using FastEndpoints.Swagger;
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +21,10 @@ builder.Logging.AddSimpleConsole(options =>
     options.IncludeScopes = true;
 });
 builder.Logging.AddDebug();
+
+// Prevent legacy inbound claim remapping.
+// This keeps claim names such as "groups" and "name" in their token form.
+JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 var applicationInsightsConnectionString =
     builder.Configuration.GetConnectionString("ApplicationInsights")
@@ -39,7 +46,37 @@ builder.Services.AddOpenTelemetry()
             : applicationInsightsConnectionString;
     });
 
-builder.Services.AddRazorPages();
+var hrEmployeeDocumentsGroupId =
+    builder.Configuration["Authorization:HREmployeeDocumentsGroupId"];
+
+if (string.IsNullOrWhiteSpace(hrEmployeeDocumentsGroupId))
+{
+    throw new InvalidOperationException(
+        "Authorization:HREmployeeDocumentsGroupId is missing. " +
+        "Set it to the Microsoft Entra object ID of the HREmployeeDocuments security group.");
+}
+
+builder.Services
+    .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("HREmployeeDocumentsOnly", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("groups", hrEmployeeDocumentsGroupId);
+    });
+
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .RequireClaim("groups", hrEmployeeDocumentsGroupId)
+        .Build();
+});
+
+builder.Services.AddRazorPages()
+    .AddMicrosoftIdentityUI();
+
 builder.Services.AddFastEndpoints();
 
 builder.Services.SwaggerDocument(options =>
@@ -51,18 +88,14 @@ builder.Services.SwaggerDocument(options =>
     };
 });
 
-builder.Services
-    .AddAuthentication(DevAuthHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(
-        DevAuthHandler.SchemeName,
-        _ => { });
-
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("InternalUsers", policy =>
+builder.Services.SwaggerDocument(options =>
+{
+    options.DocumentSettings = settings =>
     {
-        policy.RequireAuthenticatedUser();
-        policy.RequireClaim("employee_portal", "true");
-    });
+        settings.Title = "Employee Documents Viewer API";
+        settings.Version = "v1";
+    };
+});
 
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
@@ -118,5 +151,8 @@ app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();
 
 app.MapGet("/", () => Results.LocalRedirect("/documents"));
-
+app.MapGet("/debug/claims", (HttpContext ctx) =>
+{
+    return ctx.User.Claims.Select(c => new { c.Type, c.Value });
+});
 app.Run();
