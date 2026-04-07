@@ -1,16 +1,58 @@
 {
   "name": "employee-documents-viewer",
-  "image": "mcr.microsoft.com/dotnet/sdk:10.0",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "mounts": [
-    "source=${localEnv:APPDATA}/Microsoft/UserSecrets,target=/root/.microsoft/usersecrets,type=bind",
-    "source=${localEnv:USERPROFILE}\\.aspnet\\https,target=/https,type=bind"
+    "source=${localEnv:APPDATA}/Microsoft/UserSecrets,target=/root/.microsoft/usersecrets,type=bind"
   ],
   "forwardPorts": [
-    7218
+    7043
   ],
+  "portsAttributes": {
+    "7043": {
+      "label": "Employee Documents Viewer",
+      "onAutoForward": "openBrowser"
+    }
+  },
   "remoteEnv": {
-    "ASPNETCORE_Kestrel__Certificates__Default__Path": "/https/EmployeeDocumentsViewer.pfx"
-  }
+    "ASPNETCORE_URLS": "http://0.0.0.0:7043",
+    "ASPNETCORE_ENVIRONMENT": "Development",
+    "DOTNET_USE_POLLING_FILE_WATCHER": "1",
+    "DOTNET_NOLOGO": "true",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "NUGET_XMLDOC_MODE": "skip"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode-remote.remote-containers",
+        "ms-azuretools.vscode-containers",
+        "ms-azuretools.vscode-azureappservice",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azuretools.vscode-azurestorage",
+        "ms-dotnettools.csharp",
+        "zhucy.project-tree",
+        "ms-mssql.mssql",
+        "redhat.vscode-xml"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "files.exclude": {
+          "**/bin": true,
+          "**/obj": true
+        },
+        "search.exclude": {
+          "**/bin": true,
+          "**/obj": true
+        },
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true
+      }
+    }
+  },
+  "postCreateCommand": "dotnet restore --locked-mode || dotnet restore"
 }
