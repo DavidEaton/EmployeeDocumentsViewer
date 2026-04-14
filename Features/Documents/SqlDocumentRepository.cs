@@ -82,7 +82,8 @@ public sealed class SqlDocumentRepository(
                     : reader.GetDateTime(terminationDateOrdinal),
                 UpdatedUtc: reader.IsDBNull(updatedUtcOrdinal)
                     ? null
-                    : reader.GetDateTimeOffset(updatedUtcOrdinal)));
+                    : reader.GetDateTimeOffset(updatedUtcOrdinal),
+                CompanyKey: company.ToString()));
         }
 
         return (totalCount, filteredCount, rows);

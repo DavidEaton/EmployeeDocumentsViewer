@@ -9,4 +9,5 @@ public sealed record DocumentReadRow(
     int? Year,
     bool Active,
     DateTime? TerminationDate,
-    DateTimeOffset? UpdatedUtc);
+    DateTimeOffset? UpdatedUtc,
+    string CompanyKey);

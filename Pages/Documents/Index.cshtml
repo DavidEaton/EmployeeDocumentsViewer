@@ -48,134 +48,134 @@
         const loadDocumentsButton = document.getElementById('loadDocumentsButton');
 
         const table = new DataTable('#documents', {
-            processing: true,
-            serverSide: true,
-            pageLength: 10,
-            searching: true,
-            ordering: true,
-            ajax: async function (data, callback) {
-                const companyKey = companySelect.value;
+        processing: true,
+        serverSide: true,
+        pageLength: 10,
+        searching: true,
+        ordering: true,
+        ajax: async function (data, callback) {
+        const companyKey = companySelect.value;
 
-                if (!companyKey) {
-                    callback({
-                        draw: data.draw,
-                        recordsTotal: 0,
-                        recordsFiltered: 0,
-                        data: []
-                    });
-                    return;
-                }
+        if (!companyKey) {
+        callback({
+        draw: data.draw,
+        recordsTotal: 0,
+        recordsFiltered: 0,
+        data: []
+        });
+        return;
+        }
 
-                const order = data.order && data.order.length > 0 ? data.order[0] : null;
-                const columnIndex = order ? order.column : 1;
-                const columnName = data.columns[columnIndex].data;
-                const direction = order ? order.dir : 'asc';
+        const order = data.order && data.order.length > 0 ? data.order[0] : null;
+        const columnIndex = order ? order.column : 1;
+        const columnName = data.columns[columnIndex].data;
+        const direction = order ? order.dir : 'asc';
 
-                const payload = {
-                    draw: data.draw,
-                    companyKey: companyKey,
-                    start: data.start,
-                    length: data.length,
-                    searchTerm: data.search?.value ?? '',
-                    sortColumn: columnName,
-                    sortDirection: direction
-                };
+        const payload = {
+        draw: data.draw,
+        companyKey: companyKey,
+        start: data.start,
+        length: data.length,
+        searchTerm: data.search?.value ?? '',
+        sortColumn: columnName,
+        sortDirection: direction
+        };
 
-                try {
-                    const response = await fetch('/api/documents/list', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(payload)
-                    });
+        try {
+        const response = await fetch('/api/documents/list', {
+        method: 'POST',
+        headers: {
+        'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+        });
 
-                    if (!response.ok) {
-                        console.error('Document list request failed:', response.status, response.statusText);
+        if (!response.ok) {
+        console.error('Document list request failed:', response.status, response.statusText);
 
-                        callback({
-                            draw: data.draw,
-                            recordsTotal: 0,
-                            recordsFiltered: 0,
-                            data: []
-                        });
+        callback({
+        draw: data.draw,
+        recordsTotal: 0,
+        recordsFiltered: 0,
+        data: []
+        });
 
-                        return;
-                    }
+        return;
+        }
 
-                    const json = await response.json();
-                    callback(json);
-                }
-                catch (error) {
-                    console.error('Document list request threw an error:', error);
+        const json = await response.json();
+        callback(json);
+        }
+        catch (error) {
+        console.error('Document list request threw an error:', error);
 
-                    callback({
-                        draw: data.draw,
-                        recordsTotal: 0,
-                        recordsFiltered: 0,
-                        data: []
-                    });
-                }
-            },
-            columns: [
-                { data: 'employeeId', name: 'employeeId' },
-                { data: 'employee', name: 'employee' },
-                { data: 'department', name: 'department' },
-                { data: 'documentType', name: 'documentType' },
-                { data: 'year', name: 'year' },
-                {
-                    data: 'active',
-                    name: 'active',
-                    render: function (data) {
-                        return data ? 'Active' : 'Terminated';
-                    }
-                },
-                {
-                    data: 'terminationDate',
-                    name: 'terminationDate',
-                    render: function (data, type) {
-                        if (!data) {
-                            return '';
-                        }
+        callback({
+        draw: data.draw,
+        recordsTotal: 0,
+        recordsFiltered: 0,
+        data: []
+        });
+        }
+        },
+        columns: [
+        { data: 'employeeId', name: 'employeeId' },
+        { data: 'employee', name: 'employee' },
+        { data: 'department', name: 'department' },
+        { data: 'documentType', name: 'documentType' },
+        { data: 'year', name: 'year' },
+        {
+        data: 'active',
+        name: 'active',
+        render: function (data) {
+        return data ? 'Active' : 'Terminated';
+        }
+        },
+        {
+        data: 'terminationDate',
+        name: 'terminationDate',
+        render: function (data, type) {
+        if (!data) {
+        return '';
+        }
 
-                        if (type === 'sort' || type === 'type') {
-                            return data;
-                        }
+        if (type === 'sort' || type === 'type') {
+        return data;
+        }
 
-                        const date = new Date(data);
-                        if (Number.isNaN(date.getTime())) {
-                            return data;
-                        }
+        const date = new Date(data);
+        if (Number.isNaN(date.getTime())) {
+        return data;
+        }
 
-                        return date.toLocaleDateString();
-                    }
-                },
-                {
-                    data: 'blobName',
-                    orderable: false,
-                    searchable: false,
-                    render: function (data, type, row) {
-                        const company = encodeURIComponent(row.companyKey);
-                        const blobName = encodeURIComponent(data);
-                        return `<a href="/api/documents/open/${company}?blobName=${blobName}" target="_blank" rel="noopener">Open PDF</a>`;
-                    }
-                }
-            ]
+        return date.toLocaleDateString();
+        }
+        },
+        {
+        data: 'blobName',
+        orderable: false,
+        searchable: false,
+        render: function (data, type, row) {
+        const company = encodeURIComponent(companySelect.value);
+        const blobName = encodeURIComponent(data);
+        return `<a href="/api/documents/open/${company}?blobName=${blobName}" target="_blank" rel="noopener">Open PDF</a>`;
+        }
+        }
+        ]
         });
 
         loadDocumentsButton.addEventListener('click', function () {
-            if (!companySelect.value) {
-                alert('Please select a company first.');
-                return;
-            }
+        if (!companySelect.value) {
+        alert('Please select a company first.');
+        return;
+        }
 
-            table.ajax.reload();
+        table.ajax.reload();
         });
 
         companySelect.addEventListener('change', function () {
-            if (!companySelect.value) {
-                table.ajax.reload();
-            }
+        if (!companySelect.value) {
+        table.ajax.reload();
+        }
         });
     </script>
 }
