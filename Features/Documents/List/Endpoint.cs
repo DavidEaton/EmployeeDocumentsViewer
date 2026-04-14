@@ -10,7 +10,6 @@ public sealed class Endpoint(IDocumentRepository repository)
     public override void Configure()
     {
         Post("/api/documents/list");
-        Policies("InternalUsers");
     }
 
     public override async Task HandleAsync(Request request, CancellationToken cancellationToken)

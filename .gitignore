@@ -454,3 +454,8 @@ wwwroot/lib/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# User-Secrets
+user-secrets
+user-secrets.sh
+set-user-secrets.sh

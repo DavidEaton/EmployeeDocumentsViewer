@@ -236,7 +236,6 @@ app.UseStatusCodePages(async statusCodeContext =>
     }
 });
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.Use(async (context, next) =>
