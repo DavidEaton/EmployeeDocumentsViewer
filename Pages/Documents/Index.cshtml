@@ -34,7 +34,7 @@
             <th>Year</th>
             <th>Status</th>
             <th>Termination Date</th>
-            <th>Open</th>
+            <th>Document</th>
         </tr>
     </thead>
 </table>
@@ -157,7 +157,16 @@
         render: function (data, type, row) {
         const company = encodeURIComponent(companySelect.value);
         const blobName = encodeURIComponent(data);
-        return `<a href="/api/documents/open/${company}?blobName=${blobName}" target="_blank" rel="noopener">Open PDF</a>`;
+        return `<a href="/api/documents/open/${company}?blobName=${blobName}"
+        target="_blank"
+        rel="noopener"
+        aria-label="Open document"
+        title="Open document"
+        class="document-link">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" focusable="false">
+        <path d="M3 1h6l4 4v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm5 1v3h3" fill="none" stroke="currentColor" stroke-width="1.25"/>
+        </svg>
+        </a>`;
         }
         }
         ]
