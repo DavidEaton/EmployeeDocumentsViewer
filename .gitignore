@@ -459,3 +459,9 @@ wwwroot/lib/
 user-secrets
 user-secrets.sh
 set-user-secrets.sh
+
+# Azure resources
+create-azure-resources.ps1
+
+# Azure publish
+build-and-publish.ps1

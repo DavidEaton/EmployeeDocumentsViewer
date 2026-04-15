@@ -44,11 +44,13 @@ static bool HasRequiredAzureAdSettings(IConfiguration configuration)
     var instance = azureAd["Instance"];
     var tenantId = azureAd["TenantId"];
     var clientId = azureAd["ClientId"];
+    var clientSecret = azureAd["ClientSecret"];
     var callbackPath = azureAd["CallbackPath"];
 
     return !string.IsNullOrWhiteSpace(instance)
         && !string.IsNullOrWhiteSpace(tenantId)
         && !string.IsNullOrWhiteSpace(clientId)
+        && !string.IsNullOrWhiteSpace(clientSecret)
         && !string.IsNullOrWhiteSpace(callbackPath);
 }
 
@@ -57,31 +59,6 @@ static AuthorizationPolicy BuildDenyAllPolicy()
     return new AuthorizationPolicyBuilder()
         .RequireAssertion(_ => false)
         .Build();
-}
-
-var applicationInsightsConnectionString =
-    builder.Configuration.GetConnectionString("ApplicationInsights")
-    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
-
-if (IsValidAppInsightsConnectionString(applicationInsightsConnectionString))
-{
-    builder.Services.AddOpenTelemetry()
-        .UseAzureMonitor(options =>
-        {
-            options.ConnectionString = applicationInsightsConnectionString;
-        });
-
-    startupLogger.LogInformation("Application Insights telemetry enabled.");
-}
-else if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
-{
-    startupLogger.LogError(
-        "Application Insights connection string is INVALID. Telemetry is disabled.");
-}
-else
-{
-    startupLogger.LogWarning(
-        "Application Insights connection string not configured. Telemetry is disabled.");
 }
 
 static bool IsValidAppInsightsConnectionString(string? connectionString)
@@ -111,6 +88,31 @@ static bool IsValidAppInsightsConnectionString(string? connectionString)
     return true;
 }
 
+var applicationInsightsConnectionString =
+    builder.Configuration.GetConnectionString("ApplicationInsights")
+    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+
+if (IsValidAppInsightsConnectionString(applicationInsightsConnectionString))
+{
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(options =>
+        {
+            options.ConnectionString = applicationInsightsConnectionString;
+        });
+
+    startupLogger.LogInformation("Application Insights telemetry enabled.");
+}
+else if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
+{
+    startupLogger.LogError(
+        "Application Insights connection string is INVALID. Telemetry is disabled.");
+}
+else
+{
+    startupLogger.LogWarning(
+        "Application Insights connection string not configured. Telemetry is disabled.");
+}
+
 var hrEmployeeDocumentsGroupId =
     builder.Configuration["Authorization:HREmployeeDocumentsGroupId"];
 
@@ -132,9 +134,7 @@ if (hasAzureAdConfiguration)
 {
     builder.Services
         .AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-        .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"))
-        .EnableTokenAcquisitionToCallDownstreamApi()
-        .AddInMemoryTokenCaches();
+        .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
     startupLogger.LogInformation("Microsoft Entra authentication enabled.");
 }
@@ -207,12 +207,6 @@ builder.Services.AddScoped<IDocumentRepository, SqlDocumentRepository>();
 
 var app = builder.Build();
 
-var runningInContainer =
-    string.Equals(
-        Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
-        "true",
-        StringComparison.OrdinalIgnoreCase);
-
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
@@ -258,6 +252,7 @@ app.Use(async (context, next) =>
 });
 
 app.UseRouting();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseFastEndpoints();
@@ -265,26 +260,24 @@ app.UseFastEndpoints();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwaggerGen();
+
+    app.MapGet("/debug/claims", (HttpContext ctx) =>
+    {
+        return Results.Json(ctx.User.Claims.Select(c => new { c.Type, c.Value }));
+    });
+
+    app.MapGet("/health", () => Results.Ok(new
+    {
+        status = "Healthy",
+        authenticationConfigured = hasAzureAdConfiguration,
+        authorizationConfigured = hasValidGroupConfiguration,
+        telemetryConfigured = !string.IsNullOrWhiteSpace(applicationInsightsConnectionString)
+    }));
 }
 
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();
 
 app.MapGet("/", () => Results.LocalRedirect("/documents"));
-
-app.MapGet("/debug/claims", (HttpContext ctx) =>
-{
-    return Results.Json(ctx.User.Claims.Select(c => new { c.Type, c.Value }));
-})
-.AllowAnonymous();
-
-app.MapGet("/health", () => Results.Ok(new
-{
-    status = "Healthy",
-    authenticationConfigured = hasAzureAdConfiguration,
-    authorizationConfigured = hasValidGroupConfiguration,
-    telemetryConfigured = !string.IsNullOrWhiteSpace(applicationInsightsConnectionString)
-}))
-.AllowAnonymous();
 
 app.Run();
