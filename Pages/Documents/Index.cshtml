@@ -1,10 +1,19 @@
 @page "/documents"
 @model EmployeeDocumentsViewer.Pages.Documents.IndexModel
 @{
-    ViewData["Title"] = "Employee Documents";
+    ViewData["Title"] = Model.Title;
 }
 
-<h1>Employee Documents</h1>
+<h1 title="@Model.Description">
+    @Model.Title
+</h1>
+
+@if (!string.IsNullOrWhiteSpace(Model.Message))
+{
+    <div class="alert alert-info mb-3">
+        @Model.Message
+    </div>
+}
 
 <div class="row mb-3">
     <div class="col-md-4">
@@ -27,14 +36,13 @@
 <table id="documents" class="display" style="width:100%">
     <thead>
         <tr>
-            <th>Employee ID</th>
             <th>Employee</th>
             <th>Department</th>
             <th>Document Type</th>
             <th>Year</th>
             <th>Status</th>
-            <th>Termination Date</th>
-            <th>Document</th>
+            <th>Terminated</th>
+            <th>Doc.</th>
         </tr>
     </thead>
 </table>
@@ -118,7 +126,6 @@
         }
         },
         columns: [
-        { data: 'employeeId', name: 'employeeId' },
         { data: 'employee', name: 'employee' },
         { data: 'department', name: 'department' },
         { data: 'documentType', name: 'documentType' },

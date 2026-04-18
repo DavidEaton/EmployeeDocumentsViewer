@@ -196,6 +196,9 @@ builder.Services.SwaggerDocument(options =>
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
 
+builder.Services.Configure<DocumentsPageOptions>(
+   builder.Configuration.GetSection("DocumentsPage"));
+
 builder.Services.Configure<CompanyConnectionOptions>(
     builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
 
