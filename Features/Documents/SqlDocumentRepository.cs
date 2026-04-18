@@ -29,7 +29,7 @@ public sealed class SqlDocumentRepository(
         await connection.OpenAsync(cancellationToken);
 
         await using var command = new SqlCommand(
-            "Common.usp_EmployeeDocumentCatalog_Search",
+            "HR.EmployeeDocumentCatalogSearch",
             connection)
         {
             CommandType = CommandType.StoredProcedure,

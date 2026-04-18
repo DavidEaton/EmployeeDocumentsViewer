@@ -338,22 +338,25 @@ ORDER BY UpdatedUtc DESC, Employee;
 GO
 
 PRINT 'Validation 5: proc smoke tests';
-EXEC Common.usp_EmployeeDocumentCatalog_Search
+-- EXEC Common.usp_EmployeeDocumentCatalog_Search
+EXEC [HR].[EmployeeDocumentCatalogSearch]
     @SearchTerm = NULL,
     @SortColumn = N'Employee',
     @SortDescending = 0,
     @Start = 0,
     @Length = 10;
 
-EXEC Common.usp_EmployeeDocumentCatalog_Search
+-- EXEC Common.usp_EmployeeDocumentCatalog_Search
+EXEC [HR].[EmployeeDocumentCatalogSearch]
     @SearchTerm = N'smith',
     @SortColumn = N'Employee',
     @SortDescending = 0,
     @Start = 0,
     @Length = 10;
 
-EXEC Common.usp_EmployeeDocumentCatalog_Search
-    @SearchTerm = N'2024',
+-- EXEC Common.usp_EmployeeDocumentCatalog_Search
+EXEC [HR].[EmployeeDocumentCatalogSearch]
+    @SearchTerm = N'2019',
     @SortColumn = N'Year',
     @SortDescending = 1,
     @Start = 0,
@@ -371,14 +374,16 @@ SET STATISTICS IO ON;
 SET STATISTICS TIME ON;
 GO
 
-EXEC Common.usp_EmployeeDocumentCatalog_Search
+-- EXEC Common.usp_EmployeeDocumentCatalog_Search
+EXEC [HR].[EmployeeDocumentCatalogSearch]
     @SearchTerm = NULL,
     @SortColumn = N'Employee',
     @SortDescending = 0,
     @Start = 0,
     @Length = 10;
 
-EXEC Common.usp_EmployeeDocumentCatalog_Search
+-- EXEC Common.usp_EmployeeDocumentCatalog_Search
+EXEC [HR].[EmployeeDocumentCatalogSearch]
     @SearchTerm = N'smith',
     @SortColumn = N'Employee',
     @SortDescending = 0,

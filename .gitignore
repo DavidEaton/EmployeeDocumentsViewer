@@ -462,3 +462,6 @@ set-user-secrets.sh
 
 # Powershell scripts
 *.ps1
+
+# log files
+*.log

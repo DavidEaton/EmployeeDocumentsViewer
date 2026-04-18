@@ -39,9 +39,6 @@
             <th>Employee</th>
             <th>Department</th>
             <th>Document Type</th>
-            <th>Year</th>
-            <th>Status</th>
-            <th>Terminated</th>
             <th>Doc.</th>
         </tr>
     </thead>
@@ -129,34 +126,6 @@
         { data: 'employee', name: 'employee' },
         { data: 'department', name: 'department' },
         { data: 'documentType', name: 'documentType' },
-        { data: 'year', name: 'year' },
-        {
-        data: 'active',
-        name: 'active',
-        render: function (data) {
-        return data ? 'Active' : 'Terminated';
-        }
-        },
-        {
-        data: 'terminationDate',
-        name: 'terminationDate',
-        render: function (data, type) {
-        if (!data) {
-        return '';
-        }
-
-        if (type === 'sort' || type === 'type') {
-        return data;
-        }
-
-        const date = new Date(data);
-        if (Number.isNaN(date.getTime())) {
-        return data;
-        }
-
-        return date.toLocaleDateString();
-        }
-        },
         {
         data: 'blobName',
         orderable: false,
