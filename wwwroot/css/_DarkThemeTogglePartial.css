@@ -1,0 +1,95 @@
+:root {
+    --app-bg: #ffffff;
+    --app-text: #212529;
+    --app-surface: #ffffff;
+    --app-border: #dee2e6;
+    --app-link: #0d6efd;
+    --app-link-hover: #0a58ca;
+    --app-nav-text: #212529;
+    --app-nav-bg: #ffffff;
+    --app-nav-border: #dee2e6;
+    --app-footer-text: #6c757d;
+}
+
+body.theme-dark {
+    --app-bg: #1f232b;
+    --app-text: #e6edf3;
+    --app-surface: #2a2f38;
+    --app-border: #3a404b;
+    --app-link: #7cb6ff;
+    --app-link-hover: #9ac7ff;
+    --app-nav-text: #e6edf3;
+    --app-nav-bg: #2a2f38;
+    --app-nav-border: #3a404b;
+    --app-footer-text: #c0c6ce;
+}
+
+body {
+    background-color: var(--app-bg);
+    color: var(--app-text);
+}
+
+.navbar {
+    background-color: var(--app-nav-bg) !important;
+    border-color: var(--app-nav-border) !important;
+}
+
+.navbar .navbar-brand,
+.navbar .nav-link,
+.navbar .navbar-text {
+    color: var(--app-nav-text) !important;
+}
+
+a {
+    color: var(--app-link);
+}
+
+a:hover {
+    color: var(--app-link-hover);
+}
+
+.footer {
+    color: var(--app-footer-text) !important;
+    border-top-color: var(--app-border) !important;
+}
+
+.card,
+.table,
+.table th,
+.table td,
+.dropdown-menu,
+.modal-content,
+.form-control,
+.form-select {
+    background-color: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+.dark-theme-toggle-button {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid var(--app-border);
+    background-color: color-mix(in srgb, var(--app-surface) 92%, #000 8%);
+    color: var(--app-text);
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.dark-theme-toggle-button:hover {
+    transform: translateY(-1px);
+    background-color: color-mix(in srgb, var(--app-surface) 85%, #000 15%);
+}
+
+.dark-theme-toggle-button:focus-visible {
+    outline: 2px solid var(--app-link);
+    outline-offset: 2px;
+}
+
+.dark-theme-toggle-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+}
