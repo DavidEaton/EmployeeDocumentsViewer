@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using EmployeeDocumentsViewer;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents;
 using FastEndpoints;
@@ -13,7 +14,9 @@ using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using OpenTelemetry.Instrumentation.AspNetCore;
 using OpenTelemetry.Instrumentation.Http;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 

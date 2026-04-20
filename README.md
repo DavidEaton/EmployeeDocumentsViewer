@@ -27,7 +27,7 @@ The application is intentionally split into **metadata query in SQL** and **cont
 - EF Core SQL Server provider
 - Azure Blob Storage SDK
 - Microsoft Identity Web (OpenID Connect / Entra ID)
-- Azure Monitor OpenTelemetry exporter (optional)
+- Azure Monitor OpenTelemetry exporter
 
 ---
 
@@ -116,7 +116,7 @@ Supported company keys are currently the `Company` enum values:
 - `DSI`
 - `DSN`
 
-### 2) Authentication (AzureAd)
+### 2) Authentication (Microsoft Entra ID/AzureAd)
 
 The app expects full `AzureAd` settings:
 
@@ -139,7 +139,7 @@ The policy `HREmployeeDocumentsOnly` requires:
 
 If missing, app runs in deny-all mode.
 
-### 4) Telemetry (optional)
+### 4) Telemetry
 
 Set either:
 
@@ -164,7 +164,7 @@ The connection string is validated at startup; invalid values disable telemetry.
 Query behavior in `SqlDocumentRepository.SearchAsync`:
 
 - filters to `IsDeleted = 0`
-- filters by selected `CompanyKey`
+- database selected by selected `CompanyKey`
 - left joins employee lookup on employee ID
 - applies optional search over blob/document/employee/department (+ numeric employee ID match)
 - applies server-side sorting
@@ -206,9 +206,6 @@ Sort columns accepted by parser:
 - `employee`
 - `department`
 - `documentType`
-- `year`
-- `active`
-- `terminationDate`
 - `updatedUtc` (default)
 
 Response shape:
@@ -225,9 +222,6 @@ Response shape:
       "employee": "Doe, Jane",
       "department": "HR",
       "documentType": "W-2",
-      "year": 2025,
-      "active": true,
-      "terminationDate": null,
       "updatedUtc": "2026-01-10T15:22:00+00:00",
       "companyKey": "CII"
     }
