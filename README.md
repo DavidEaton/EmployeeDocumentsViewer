@@ -1,333 +1,312 @@
 # Employee Documents Viewer
 
-A lightweight internal web application for securely browsing and opening employee documents stored in Azure Blob Storage.
+Employee Documents Viewer is an internal ASP.NET Core web application for HR users to:
 
-The application presents a searchable, sortable grid backed by a **SQL-based document catalog index**, ensuring fast and responsive user interaction even with large document sets.
+- choose a company,
+- search and sort an employee document catalog stored in SQL, and
+- open the underlying file stream from Azure Blob Storage.
 
-Documents are **indexed into SQL for querying** and **streamed from Blob Storage for retrieval**.
-
----
-
-## Architecture Overview
-
-The application consists of five logical layers:
-
-Browser (DataTables UI)
-│
-▼
-Razor Pages UI
-│
-▼
-FastEndpoints API
-│
-▼
-Repository (SQL-backed query engine)
-│
-▼
-Document Catalog (Azure SQL)
-│
-▼
-Azure Blob Storage (file content only)
+The application is intentionally split into **metadata query in SQL** and **content retrieval from Blob Storage**.
 
 ---
 
-## Key Architectural Principle
+## What this app does
 
-**Blob Storage is not used as a query engine.**
-
-Instead:
-
-* Azure SQL stores a **document catalog index**
-* The UI queries SQL for fast paging/filtering/sorting
-* Blob Storage is used **only when opening a document**
-
-This eliminates expensive container scans and enables sub-second response times even with large datasets (e.g., 60k+ documents).
+1. Renders a Razor Pages UI at `/documents`.
+2. Calls a FastEndpoints API (`POST /api/documents/list`) for paging/filtering/sorting.
+3. Reads document metadata from SQL (`Common.EmployeeDocumentCatalog` + `HR.EmployeeDocumentsLookup`).
+4. Opens files through `GET /api/documents/open/{companyKey}?blobName=...` by streaming blobs from the `hrdocs` container.
 
 ---
 
-## UI Layer
+## Tech stack
 
-* ASP.NET Core **Razor Pages**
-
-* **DataTables** grid (server-side mode)
-
-* Fully supports:
-  
-  * paging
-  * sorting
-  * searching
-
-Each row links to a document served via the API.
+- .NET 10 (`net10.0`)
+- ASP.NET Core Razor Pages
+- FastEndpoints + FastEndpoints.Swagger
+- EF Core SQL Server provider
+- Azure Blob Storage SDK
+- Microsoft Identity Web (OpenID Connect / Entra ID)
+- Azure Monitor OpenTelemetry exporter (optional)
 
 ---
 
-## API Layer
+## Runtime architecture
 
-* Built using **FastEndpoints**
+```text
+Browser (/documents)
+  -> Razor Page + vanilla JS table UI
+  -> FastEndpoints API
+  -> SqlDocumentRepository
+  -> SQL metadata tables/views
 
-* Enforces authorization policies
+Document open request
+  -> FastEndpoints API
+  -> SqlDocumentRepository
+  -> Azure Blob Storage (container: hrdocs)
+```
 
-* Returns:
-  
-  * JSON (document metadata)
-  * streamed file responses (PDF, images, etc.)
+### Key behavior
 
----
-
-## Data Layer
-
-### Document Catalog (Azure SQL)
-
-Primary query source for the application.
-
-Stores indexed metadata:
-
-* BlobName
-* EmployeeId
-* DocumentType
-* Department (via join)
-* Updated date
-* Active / terminated status
-
-This enables efficient:
-
-* filtering
-* sorting
-* paging
-* searching
-
-### Document Storage (Azure Blob Storage)
-
-Stores the actual document files.
-
-Access pattern:
-
-* No listing or querying at runtime
-* Files retrieved **only when requested**
+- **No blob listing for search.** Search runs against SQL only.
+- **Blob access is on-demand only** when a user clicks Open.
+- **Per-company connection resolution** is handled from configuration.
 
 ---
 
-## Document Indexing
+## Repository structure (current)
 
-A background indexing process synchronizes Blob Storage with the SQL catalog.
-
-### Responsibilities
-
-* Enumerates blobs in the container
-* Parses blob names into structured metadata
-* Computes a SHA-256 hash for stable indexing
-* Upserts records into SQL
-* Marks deleted blobs as inactive
-
-### Key Design Detail
-
-Because blob names can exceed SQL index size limits:
-
-* A **SHA-256 hash (BlobNameHash)** is used for indexing
-
-* Full blob name is still stored for correctness
-
-* Matching uses:
-  
-  * CompanyKey
-  * BlobNameHash
-  * BlobName
-
----
-
-## Key Features
-
-* Fast server-side paging, sorting, and filtering
-* SQL-backed document catalog index
-* Secure document streaming (no direct blob exposure)
-* Vertical-slice architecture (FastEndpoints)
-* Swagger UI for API testing
-* Minimal infrastructure requirements
+```text
+EmployeeDocumentsViewer/
+  Configuration/
+    CompanyConnectionOptions.cs
+    CompanyConnectionStringResolver.cs
+    DocumentsPageOptions.cs
+    StorageOptions.cs
+  Features/
+    Company.cs
+    Documents/
+      Data/
+        DocumentCatalogDbContext.cs
+        Entities/
+      List/
+        Endpoint.cs
+        Request.cs
+        Response.cs
+        DocumentReadRow.cs
+      Open/
+        Endpoint.cs
+        Request.cs
+      SqlDocumentRepository.cs
+      DocumentSortParser.cs
+      DocumentSortColumn.cs
+  Pages/
+    Documents/
+      Index.cshtml
+      Index.cshtml.cs
+  Scripts/
+    *.sql
+  Program.cs
+```
 
 ---
 
-## Technology Stack
+## Configuration
 
-| Technology         | Purpose                          |
-| ------------------ | -------------------------------- |
-| ASP.NET Core       | Web application framework        |
-| Razor Pages        | UI framework                     |
-| FastEndpoints      | API endpoint framework           |
-| DataTables         | Interactive data grid            |
-| Swagger / OpenAPI  | API testing and documentation    |
-| Bootstrap          | UI styling                       |
-| Azure SQL          | Document catalog + employee data |
-| Azure Blob Storage | Document storage                 |
+Configuration is primarily in `appsettings.json` (with environment overrides from `appsettings.Development.json` and user secrets/environment variables).
 
----
+### 1) Company connection mapping
 
-## Project Structure
+Each company requires:
 
-EmployeeDocumentsViewer
-│
-├─ Features
-│   └─ Documents
-│       ├─ Indexing
-│       │   ├─ IDocumentCatalogIndexer.cs
-│       │   ├─ SqlDocumentCatalogIndexer.cs
-│       │   └─ DocumentCatalogSyncBackgroundService.cs
-│       │
-│       ├─ Read
-│       │   ├─ List
-│       │   │   ├─ Endpoint.cs
-│       │   │   ├─ Request.cs
-│       │   │   └─ Response.cs
-│       │   │
-│       │   └─ GetByBlobName
-│       │       ├─ Endpoint.cs
-│       │       └─ Request.cs
-│       │
-│       ├─ SqlDocumentRepository.cs
-│       └─ DocumentBlobNameParser.cs
-│
-├─ Pages
-│   └─ Documents
-│       ├─ Index.cshtml
-│       └─ Index.cshtml.cs
-│
-├─ Security
-│   └─ DevAuthHandler.cs
-│
-└─ Program.cs
+- `ConnectionString` (SQL)
+- `BlobStorageConnectionString` (Blob)
+- `DisplayName` (UI label)
 
----
+Path:
 
-## API Endpoints
+```json
+CompanyConnections:Companies:{CompanyKey}
+```
 
-### List Documents
+Supported company keys are currently the `Company` enum values:
 
-POST /api/documents/list
+- `CII`
+- `CSI`
+- `DSI`
+- `DSN`
 
-Returns paginated document metadata from SQL.
+### 2) Authentication (AzureAd)
 
----
+The app expects full `AzureAd` settings:
 
-### Open Document
+- `Instance`
+- `TenantId`
+- `ClientId`
+- `ClientSecret`
+- `CallbackPath`
 
-GET /api/documents/read/getbyblobname/{companyKey}?blobName={blobName}
+If AzureAd settings are incomplete, the app registers a local cookie scheme only, and authorization is forced to deny-all.
 
-Streams the file directly from Azure Blob Storage.
+### 3) Authorization group
+
+`Authorization:HREmployeeDocumentsGroupId` must be set.
+
+The policy `HREmployeeDocumentsOnly` requires:
+
+- authenticated user
+- `groups` claim containing that group ID
+
+If missing, app runs in deny-all mode.
+
+### 4) Telemetry (optional)
+
+Set either:
+
+- `ConnectionStrings:ApplicationInsights`, or
+- `APPLICATIONINSIGHTS_CONNECTION_STRING`
+
+The connection string is validated at startup; invalid values disable telemetry.
+
+### 5) Documents page text
+
+`DocumentsPage` controls UI title/description/message shown on `/documents`.
 
 ---
 
-## Running the Application
+## Database model used by the app
 
-### Requirements
+`DocumentCatalogDbContext` uses:
 
-* .NET 10+
-* Azure SQL database
-* Azure Storage account
+- `Common.EmployeeDocumentCatalog` (table)
+- `HR.EmployeeDocumentsLookup` (view)
+
+Query behavior in `SqlDocumentRepository.SearchAsync`:
+
+- filters to `IsDeleted = 0`
+- filters by selected `CompanyKey`
+- left joins employee lookup on employee ID
+- applies optional search over blob/document/employee/department (+ numeric employee ID match)
+- applies server-side sorting
+- applies paging with max page size clamp of 500
+
+Returned row model includes:
+
+- BlobName
+- EmployeeId / Employee
+- Department
+- DocumentType
+- UpdatedUtc (fallback to BlobLastModifiedUtc)
+- Active
+- CompanyKey
 
 ---
 
-### Run Locally
+## HTTP endpoints
+
+## `POST /api/documents/list`
+
+Request JSON:
+
+```json
+{
+  "draw": 1,
+  "companyKey": "CII",
+  "start": 0,
+  "length": 50,
+  "searchTerm": "w2",
+  "sortColumn": "updatedUtc",
+  "sortDirection": "desc"
+}
+```
+
+Sort columns accepted by parser:
+
+- `employeeId`
+- `employee`
+- `department`
+- `documentType`
+- `year`
+- `active`
+- `terminationDate`
+- `updatedUtc` (default)
+
+Response shape:
+
+```json
+{
+  "draw": 1,
+  "recordsTotal": 1234,
+  "recordsFiltered": 52,
+  "data": [
+    {
+      "blobName": "...",
+      "employeeId": 123,
+      "employee": "Doe, Jane",
+      "department": "HR",
+      "documentType": "W-2",
+      "year": 2025,
+      "active": true,
+      "terminationDate": null,
+      "updatedUtc": "2026-01-10T15:22:00+00:00",
+      "companyKey": "CII"
+    }
+  ]
+}
+```
+
+## `GET /api/documents/open/{companyKey}?blobName=...`
+
+Behavior:
+
+- 400 for invalid company key
+- 400 when `blobName` is missing
+- 404 when blob does not exist
+- 200 stream result with range processing enabled when found
+
+---
+
+## Local development
+
+## Prerequisites
+
+- .NET SDK 10
+- Access to target SQL databases
+- Access to target Azure Blob Storage accounts/containers
+- Azure app registration secrets (for full auth flow)
+
+## Setup
+
+1. Populate configuration values in user secrets or environment variables (recommended), including:
+   - `CompanyConnections`
+   - `AzureAd`
+   - `Authorization:HREmployeeDocumentsGroupId`
+2. Restore/build:
 
 ```bash
 dotnet restore
 dotnet build
+```
+
+3. Run:
+
+```bash
 dotnet run
 ```
 
-Application URL:
+Default local URLs are in `Properties/launchSettings.json`.
 
-https://localhost:7043/documents
+Open:
 
----
-
-## Swagger UI
-
-Available in development:
-
-https://localhost:7043/swagger
+- App: `https://localhost:7043/documents`
+- Swagger (Development only): `https://localhost:7043/swagger`
+- Debug claims endpoint (Development only): `https://localhost:7043/debug/claims`
+- Health endpoint (Development only): `https://localhost:7043/health`
 
 ---
 
-## Development Authentication
+## Security notes
 
-Uses:
-
-DevAuthHandler
-
-Automatically injects:
-
-employee_portal = true
-
-Production uses Azure Entra ID.
+- App is intended for authenticated HR users in a specific Entra group.
+- If required auth settings are missing, fallback policy blocks requests (deny-all).
+- Files are proxied through the app (no direct blob URL exposure in UI).
+- Non-development environments enable exception handler + HSTS.
 
 ---
 
-## Database Schema
+## SQL scripts folder
 
-The document catalog table:
-
-Common.EmployeeDocumentCatalog
-
-Key columns:
-
-* Id (clustered PK)
-* CompanyKey
-* BlobName
-* BlobNameHash (SHA-256)
-* EmployeeId
-* DocumentTypeDisplay
-* UpdatedUtc
-* IsDeleted
-
-Indexes enable fast lookup and filtering.
+`Scripts/` contains SQL artifacts related to catalog search objects and migration support (views/procedures/indexes). These scripts are operational assets and are not automatically executed by app startup.
 
 ---
 
-## Performance Characteristics
+## Known implementation notes
 
-### Previous design (deprecated)
-
-* Full blob container scan per request
-* In-memory filtering and sorting
-* Poor scalability
-
-### Current design
-
-* SQL-based paging/filtering/sorting
-* Constant-time query performance
-* Blob access only on demand
-
----
-
-## Production Architecture Example
-
-Users
-│
-▼
-Internal Web App
-│
-▼
-Azure App Service
-│
-├── Azure SQL Database (document catalog + employee data)
-│
-└── Azure Blob Storage (documents)
-
----
-
-## Security Considerations
-
-* Azure Entra authentication
-* Private blob containers
-* No direct blob URLs exposed
-* Files streamed through API
-* Swagger disabled in production
-  
-  
+- `Storage:DocumentsContainerName` exists in configuration options, but `SqlDocumentRepository` currently uses a hard-coded container name (`hrdocs`).
+- The project references EF Core `10.0.0-preview` packages, so SDK/package compatibility should be validated in CI/build agents.
 
 ---
 
 ## License
 
 Internal use only.
-
-
