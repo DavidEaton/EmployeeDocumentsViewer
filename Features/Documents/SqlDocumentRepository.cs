@@ -1,9 +1,9 @@
 using Azure;
 using Azure.Storage.Blobs;
 using EmployeeDocumentsViewer.Configuration;
+using EmployeeDocumentsViewer.Features.Documents.Data;
 using EmployeeDocumentsViewer.Features.Documents.List;
-using Microsoft.Data.SqlClient;
-using System.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeDocumentsViewer.Features.Documents;
 
@@ -25,68 +25,104 @@ public sealed class SqlDocumentRepository(
     {
         var connectionString = _connectionStringResolver.GetSqlConnectionString(company);
 
-        await using var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
+        var options = new DbContextOptionsBuilder<DocumentCatalogDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
 
-        await using var command = new SqlCommand(
-            "HR.EmployeeDocumentCatalogSearch",
-            connection)
+        await using var context = new DocumentCatalogDbContext(options);
+
+        var companyKey = company.ToString();
+
+        var query = context.EmployeeDocumentCatalog
+            .AsNoTracking()
+            .Where(catalog => !catalog.IsDeleted && catalog.CompanyKey == companyKey)
+            .GroupJoin(
+                context.EmployeeDocumentsLookup.AsNoTracking(),
+                catalog => catalog.EmployeeId,
+                employee => employee.Id,
+                (catalog, employeeGroup) => new
+                {
+                    catalog,
+                    employeeGroup
+                })
+            .SelectMany(
+                joined => joined.employeeGroup.DefaultIfEmpty(),
+                (joined, employee) => new DocumentQueryRow
+                {
+                    BlobName = joined.catalog.BlobName,
+                    EmployeeId = joined.catalog.EmployeeId,
+                    Employee = employee != null ? employee.NameLastFirst : null,
+                    Department = employee != null ? employee.HomeDepartment : null,
+                    DocumentType = joined.catalog.DocumentTypeDisplay,
+                    UpdatedUtc = joined.catalog.UpdatedUtc ?? joined.catalog.BlobLastModifiedUtc,
+                    Active = employee != null && employee.Active
+                });
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var normalizedSearchTerm = searchTerm?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedSearchTerm))
         {
-            CommandType = CommandType.StoredProcedure,
-            CommandTimeout = 60
-        };
+            var term = $"%{normalizedSearchTerm}%";
+            var employeeIdSearch = int.TryParse(normalizedSearchTerm, out var parsedEmployeeId)
+                ? parsedEmployeeId
+                : (int?)null;
 
-        command.Parameters.AddWithValue("@SearchTerm", (object?)searchTerm ?? DBNull.Value);
-        command.Parameters.AddWithValue("@SortColumn", sortColumn.ToString());
-        command.Parameters.AddWithValue("@SortDescending", descending);
-        command.Parameters.AddWithValue("@Start", start);
-        command.Parameters.AddWithValue("@Length", length);
-
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-
-        await reader.ReadAsync(cancellationToken);
-        var totalCount = reader.GetInt32(0);
-
-        await reader.NextResultAsync(cancellationToken);
-        await reader.ReadAsync(cancellationToken);
-        var filteredCount = reader.GetInt32(0);
-
-        await reader.NextResultAsync(cancellationToken);
-
-        var blobNameOrdinal = reader.GetOrdinal("BlobName");
-        var employeeIdOrdinal = reader.GetOrdinal("EmployeeId");
-        var employeeOrdinal = reader.GetOrdinal("Employee");
-        var departmentOrdinal = reader.GetOrdinal("Department");
-        var documentTypeOrdinal = reader.GetOrdinal("DocumentType");
-        var yearOrdinal = reader.GetOrdinal("Year");
-        var activeOrdinal = reader.GetOrdinal("Active");
-        var terminationDateOrdinal = reader.GetOrdinal("TerminationDate");
-        var updatedUtcOrdinal = reader.GetOrdinal("UpdatedUtc");
-
-        var rows = new List<DocumentReadRow>();
-
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            rows.Add(new DocumentReadRow(
-                BlobName: reader.GetString(blobNameOrdinal),
-                EmployeeId: reader.GetInt32(employeeIdOrdinal),
-                Employee: reader.GetString(employeeOrdinal),
-                Department: reader.IsDBNull(departmentOrdinal)
-                    ? string.Empty
-                    : reader.GetString(departmentOrdinal),
-                DocumentType: reader.GetString(documentTypeOrdinal),
-                Year: reader.IsDBNull(yearOrdinal) ? null : reader.GetInt32(yearOrdinal),
-                Active: reader.GetBoolean(activeOrdinal),
-                TerminationDate: reader.IsDBNull(terminationDateOrdinal)
-                    ? null
-                    : reader.GetDateTime(terminationDateOrdinal),
-                UpdatedUtc: reader.IsDBNull(updatedUtcOrdinal)
-                    ? null
-                    : reader.GetDateTimeOffset(updatedUtcOrdinal),
-                CompanyKey: company.ToString()));
+            query = query.Where(row =>
+                EF.Functions.Like(row.BlobName, term)
+                || EF.Functions.Like(row.DocumentType, term)
+                || (row.Employee != null && EF.Functions.Like(row.Employee, term))
+                || (row.Department != null && EF.Functions.Like(row.Department, term))
+                || (employeeIdSearch.HasValue && row.EmployeeId == employeeIdSearch.Value));
         }
 
-        return (totalCount, filteredCount, rows);
+        var filteredCount = await query.CountAsync(cancellationToken);
+
+        query = ApplySorting(query, sortColumn, descending);
+
+        var pageSize = Math.Clamp(length, 1, 500);
+
+        var page = await query
+            .Skip(Math.Max(0, start))
+            .Take(pageSize)
+            .Select(row => new DocumentReadRow(
+                BlobName: row.BlobName,
+                EmployeeId: row.EmployeeId,
+                Employee: row.Employee ?? row.EmployeeId.ToString(),
+                Department: row.Department ?? string.Empty,
+                DocumentType: row.DocumentType,
+                Year: row.UpdatedUtc.HasValue ? row.UpdatedUtc.Value.Year : null,
+                Active: row.Active,
+                TerminationDate: null,
+                UpdatedUtc: row.UpdatedUtc,
+                CompanyKey: companyKey))
+            .ToListAsync(cancellationToken);
+
+        return (totalCount, filteredCount, page);
+    }
+
+    private static IQueryable<DocumentQueryRow> ApplySorting(
+        IQueryable<DocumentQueryRow> query,
+        DocumentSortColumn sortColumn,
+        bool descending)
+    {
+        return (sortColumn, descending) switch
+        {
+            (DocumentSortColumn.EmployeeId, false) => query.OrderBy(x => x.EmployeeId),
+            (DocumentSortColumn.EmployeeId, true) => query.OrderByDescending(x => x.EmployeeId),
+            (DocumentSortColumn.Employee, false) => query.OrderBy(x => x.Employee),
+            (DocumentSortColumn.Employee, true) => query.OrderByDescending(x => x.Employee),
+            (DocumentSortColumn.Department, false) => query.OrderBy(x => x.Department),
+            (DocumentSortColumn.Department, true) => query.OrderByDescending(x => x.Department),
+            (DocumentSortColumn.DocumentType, false) => query.OrderBy(x => x.DocumentType),
+            (DocumentSortColumn.DocumentType, true) => query.OrderByDescending(x => x.DocumentType),
+            (DocumentSortColumn.Active, false) => query.OrderBy(x => x.Active),
+            (DocumentSortColumn.Active, true) => query.OrderByDescending(x => x.Active),
+            (DocumentSortColumn.Year, false) => query.OrderBy(x => x.UpdatedUtc),
+            (DocumentSortColumn.Year, true) => query.OrderByDescending(x => x.UpdatedUtc),
+            _ when descending => query.OrderByDescending(x => x.UpdatedUtc),
+            _ => query.OrderBy(x => x.UpdatedUtc)
+        };
     }
 
     public async Task<BlobDocumentStream?> OpenReadAsync(
@@ -148,5 +184,16 @@ public sealed class SqlDocumentRepository(
             ".tiff" => "image/tiff",
             _ => "application/octet-stream"
         };
+    }
+
+    private sealed class DocumentQueryRow
+    {
+        public string BlobName { get; init; } = string.Empty;
+        public int EmployeeId { get; init; }
+        public string? Employee { get; init; }
+        public string? Department { get; init; }
+        public string DocumentType { get; init; } = string.Empty;
+        public DateTimeOffset? UpdatedUtc { get; init; }
+        public bool Active { get; init; }
     }
 }

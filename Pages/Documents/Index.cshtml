@@ -15,152 +15,215 @@
     </div>
 }
 
-<div class="row mb-3">
-    <div class="col-md-4">
-        <label for="companySelect" class="form-label">Company</label>
-        <select id="companySelect" class="form-select">
-            <option value="">-- Select a company --</option>
-            @foreach (var company in Model.Companies)
-            {
-                <option value="@company.Value">@company.Text</option>
-            }
-        </select>
+<div id="document-grid" class="card p-3">
+    <div class="row g-2 align-items-end mb-3">
+        <div class="col-md-4">
+            <label for="companySelect" class="form-label">Company</label>
+            <select id="companySelect" class="form-select">
+                <option value="">-- Select a company --</option>
+                @foreach (var company in Model.Companies)
+                {
+                    <option value="@company.Value">@company.Text</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="searchInput" class="form-label">Search</label>
+            <input id="searchInput" type="text" class="form-control" placeholder="Employee, department, type, or ID" />
+        </div>
+        <div class="col-md-2">
+            <label for="pageSize" class="form-label">Rows</label>
+            <select id="pageSize" class="form-select">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+            </select>
+        </div>
+        <div class="col-md-2 d-grid">
+            <button id="loadDocumentsButton" type="button" class="btn btn-primary">Load</button>
+        </div>
     </div>
-    <div class="col-md-2 d-flex align-items-end">
-        <button id="loadDocumentsButton" type="button" class="btn btn-primary w-100">
-            Load Documents
-        </button>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead>
+                <tr>
+                    <th><button class="btn btn-link p-0 grid-sort" data-column="employee">Employee</button></th>
+                    <th><button class="btn btn-link p-0 grid-sort" data-column="department">Department</button></th>
+                    <th><button class="btn btn-link p-0 grid-sort" data-column="documentType">Document Type</button></th>
+                    <th><button class="btn btn-link p-0 grid-sort" data-column="updatedUtc">Updated</button></th>
+                    <th>Doc.</th>
+                </tr>
+            </thead>
+            <tbody id="documentsBody">
+                <tr><td colspan="5" class="text-muted">Choose a company and click Load.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center">
+        <div id="pagingSummary" class="text-muted"></div>
+        <div>
+            <button id="prevPage" class="btn btn-outline-secondary btn-sm">Previous</button>
+            <button id="nextPage" class="btn btn-outline-secondary btn-sm">Next</button>
+        </div>
     </div>
 </div>
 
-<table id="documents" class="display" style="width:100%">
-    <thead>
-        <tr>
-            <th>Employee</th>
-            <th>Department</th>
-            <th>Document Type</th>
-            <th>Doc.</th>
-        </tr>
-    </thead>
-</table>
-
 @section Scripts
 {
-    <script src="https://cdn.datatables.net/2.3.4/js/dataTables.min.js"></script>
-
     <script>
-        const companySelect = document.getElementById('companySelect');
-        const loadDocumentsButton = document.getElementById('loadDocumentsButton');
+        (() => {
+            const companySelect = document.getElementById('companySelect');
+            const searchInput = document.getElementById('searchInput');
+            const pageSize = document.getElementById('pageSize');
+            const loadButton = document.getElementById('loadDocumentsButton');
+            const body = document.getElementById('documentsBody');
+            const summary = document.getElementById('pagingSummary');
+            const prev = document.getElementById('prevPage');
+            const next = document.getElementById('nextPage');
+            const sortButtons = document.querySelectorAll('.grid-sort');
 
-        const table = new DataTable('#documents', {
-        processing: true,
-        serverSide: true,
-        pageLength: 10,
-        searching: true,
-        ordering: true,
-        ajax: async function (data, callback) {
-        const companyKey = companySelect.value;
+            let state = {
+                start: 0,
+                length: 50,
+                sortColumn: 'updatedUtc',
+                sortDirection: 'desc',
+                recordsFiltered: 0,
+                loading: false
+            };
 
-        if (!companyKey) {
-        callback({
-        draw: data.draw,
-        recordsTotal: 0,
-        recordsFiltered: 0,
-        data: []
-        });
-        return;
-        }
+            async function loadDocuments(resetPage) {
+                if (state.loading) return;
+                if (!companySelect.value) {
+                    renderMessage('Please select a company first.');
+                    return;
+                }
 
-        const order = data.order && data.order.length > 0 ? data.order[0] : null;
-        const columnIndex = order ? order.column : 1;
-        const columnName = data.columns[columnIndex].data;
-        const direction = order ? order.dir : 'asc';
+                if (resetPage) {
+                    state.start = 0;
+                }
 
-        const payload = {
-        draw: data.draw,
-        companyKey: companyKey,
-        start: data.start,
-        length: data.length,
-        searchTerm: data.search?.value ?? '',
-        sortColumn: columnName,
-        sortDirection: direction
-        };
+                state.length = parseInt(pageSize.value, 10);
+                state.loading = true;
+                renderMessage('Loading documents...');
 
-        try {
-        const response = await fetch('/api/documents/list', {
-        method: 'POST',
-        headers: {
-        'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-        });
+                const payload = {
+                    draw: 1,
+                    companyKey: companySelect.value,
+                    start: state.start,
+                    length: state.length,
+                    searchTerm: searchInput.value ?? '',
+                    sortColumn: state.sortColumn,
+                    sortDirection: state.sortDirection
+                };
 
-        if (!response.ok) {
-        console.error('Document list request failed:', response.status, response.statusText);
+                try {
+                    const response = await fetch('/api/documents/list', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
 
-        callback({
-        draw: data.draw,
-        recordsTotal: 0,
-        recordsFiltered: 0,
-        data: []
-        });
+                    if (!response.ok) {
+                        renderMessage(`Request failed (${response.status})`);
+                        return;
+                    }
 
-        return;
-        }
+                    const json = await response.json();
+                    state.recordsFiltered = json.recordsFiltered || 0;
+                    renderRows(json.data || []);
+                } catch (error) {
+                    renderMessage('Unable to load documents.');
+                    console.error(error);
+                } finally {
+                    state.loading = false;
+                    updatePaging();
+                }
+            }
 
-        const json = await response.json();
-        callback(json);
-        }
-        catch (error) {
-        console.error('Document list request threw an error:', error);
+            function renderRows(rows) {
+                if (!rows.length) {
+                    renderMessage('No documents found for the current filter.');
+                    return;
+                }
 
-        callback({
-        draw: data.draw,
-        recordsTotal: 0,
-        recordsFiltered: 0,
-        data: []
-        });
-        }
-        },
-        columns: [
-        { data: 'employee', name: 'employee' },
-        { data: 'department', name: 'department' },
-        { data: 'documentType', name: 'documentType' },
-        {
-        data: 'blobName',
-        orderable: false,
-        searchable: false,
-        render: function (data, type, row) {
-        const company = encodeURIComponent(companySelect.value);
-        const blobName = encodeURIComponent(data);
-        return `<a href="/api/documents/open/${company}?blobName=${blobName}"
-        target="_blank"
-        rel="noopener"
-        aria-label="Open document"
-        title="Open document"
-        class="document-link">
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" focusable="false">
-        <path d="M3 1h6l4 4v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm5 1v3h3" fill="none" stroke="currentColor" stroke-width="1.25"/>
-        </svg>
-        </a>`;
-        }
-        }
-        ]
-        });
+                body.innerHTML = rows.map(row => {
+                    const company = encodeURIComponent(companySelect.value);
+                    const blobName = encodeURIComponent(row.blobName);
+                    const updated = row.updatedUtc ? new Date(row.updatedUtc).toLocaleString() : '';
 
-        loadDocumentsButton.addEventListener('click', function () {
-        if (!companySelect.value) {
-        alert('Please select a company first.');
-        return;
-        }
+                    return `<tr>
+                        <td>${escapeHtml(row.employee || '')}</td>
+                        <td>${escapeHtml(row.department || '')}</td>
+                        <td>${escapeHtml(row.documentType || '')}</td>
+                        <td>${escapeHtml(updated)}</td>
+                        <td>
+                            <a href="/api/documents/open/${company}?blobName=${blobName}" target="_blank" rel="noopener" title="Open document">Open</a>
+                        </td>
+                    </tr>`;
+                }).join('');
+            }
 
-        table.ajax.reload();
-        });
+            function updatePaging() {
+                const start = state.recordsFiltered === 0 ? 0 : state.start + 1;
+                const end = Math.min(state.start + state.length, state.recordsFiltered);
+                summary.textContent = state.recordsFiltered === 0
+                    ? '0 results'
+                    : `${start}-${end} of ${state.recordsFiltered}`;
 
-        companySelect.addEventListener('change', function () {
-        if (!companySelect.value) {
-        table.ajax.reload();
-        }
-        });
+                prev.disabled = state.start <= 0;
+                next.disabled = state.start + state.length >= state.recordsFiltered;
+            }
+
+            function renderMessage(message) {
+                body.innerHTML = `<tr><td colspan="5" class="text-muted">${escapeHtml(message)}</td></tr>`;
+            }
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#39;');
+            }
+
+            loadButton.addEventListener('click', () => loadDocuments(true));
+            pageSize.addEventListener('change', () => loadDocuments(true));
+
+            searchInput.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    loadDocuments(true);
+                }
+            });
+
+            prev.addEventListener('click', () => {
+                if (state.start <= 0) return;
+                state.start = Math.max(0, state.start - state.length);
+                loadDocuments(false);
+            });
+
+            next.addEventListener('click', () => {
+                if (state.start + state.length >= state.recordsFiltered) return;
+                state.start += state.length;
+                loadDocuments(false);
+            });
+
+            sortButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const nextSort = button.dataset.column;
+                    if (state.sortColumn === nextSort) {
+                        state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        state.sortColumn = nextSort;
+                        state.sortDirection = 'asc';
+                    }
+
+                    loadDocuments(true);
+                });
+            });
+        })();
     </script>
 }
