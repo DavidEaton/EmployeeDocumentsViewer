@@ -5,14 +5,17 @@ using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents.Data;
 using EmployeeDocumentsViewer.Features.Documents.List;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace EmployeeDocumentsViewer.Features.Documents;
 
 public sealed class SqlDocumentRepository(
     ICompanyConnectionStringResolver connectionStringResolver,
+    IOptions<StorageOptions> storageOptions,
     ILogger<SqlDocumentRepository> logger) : IDocumentRepository
 {
     private readonly ICompanyConnectionStringResolver _connectionStringResolver = connectionStringResolver;
+    private readonly StorageOptions _storageOptions = storageOptions.Value;
     private readonly ILogger<SqlDocumentRepository> _logger = logger;
 
     public async Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentReadRow> Items)> SearchAsync(
@@ -208,7 +211,15 @@ public sealed class SqlDocumentRepository(
     private BlobContainerClient CreateDocumentsContainerClient(Company company)
     {
         var connectionString = _connectionStringResolver.GetBlobStorageConnectionString(company);
-        return new BlobContainerClient(connectionString, "hrdocs");
+        var containerName = _storageOptions.DocumentsContainerName;
+
+        if (string.IsNullOrWhiteSpace(containerName))
+        {
+            throw new InvalidOperationException(
+                $"{StorageOptions.SectionName}:{nameof(StorageOptions.DocumentsContainerName)} is missing.");
+        }
+
+        return new BlobContainerClient(connectionString, containerName);
     }
 
     private static string GetContentTypeFromFileName(string blobName)
