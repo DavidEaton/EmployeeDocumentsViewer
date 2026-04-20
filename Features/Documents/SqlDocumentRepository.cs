@@ -216,7 +216,7 @@ public sealed class SqlDocumentRepository(
         if (string.IsNullOrWhiteSpace(containerName))
         {
             throw new InvalidOperationException(
-                $"{StorageOptions.SectionName}:{nameof(StorageOptions.DocumentsContainerName)} is missing.");
+                $"{nameof(StorageOptions.DocumentsContainerName)} is missing.");
         }
 
         return new BlobContainerClient(connectionString, containerName);

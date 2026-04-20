@@ -261,7 +261,7 @@ builder.Services.Configure<CompanyConnectionOptions>(
     builder.Configuration.GetSection(CompanyConnectionOptions.SectionName));
 
 builder.Services.Configure<StorageOptions>(
-    builder.Configuration.GetSection(StorageOptions.SectionName));
+    builder.Configuration.GetSection("Storage"));
 
 builder.Services.AddScoped<ICompanyConnectionStringResolver, CompanyConnectionStringResolver>();
 builder.Services.AddScoped<IDocumentRepository, SqlDocumentRepository>();
