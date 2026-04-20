@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using OpenTelemetry.Instrumentation.AspNetCore;
+using OpenTelemetry.Instrumentation.Http;
+using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,7 +102,58 @@ if (IsValidAppInsightsConnectionString(applicationInsightsConnectionString))
         .UseAzureMonitor(options =>
         {
             options.ConnectionString = applicationInsightsConnectionString;
-        });
+            options.SamplingRatio = builder.Environment.IsDevelopment() ? 1.0F : 0.25F;
+
+            if (!builder.Environment.IsDevelopment())
+            {
+                options.StorageDirectory = @"D:\home\site\otel-storage";
+            }
+        })
+        .ConfigureResource(resource => resource
+            .AddService(
+                serviceName: Telemetry.ServiceName,
+                serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown")
+            .AddAttributes(new Dictionary<string, object>
+            {
+                ["deployment.environment"] = builder.Environment.EnvironmentName
+            }));
+
+    builder.Services.ConfigureOpenTelemetryTracerProvider((_, tracerProviderBuilder) =>
+    {
+        tracerProviderBuilder
+            .AddSource(Telemetry.ActivitySourceName);
+    });
+
+    builder.Services.ConfigureOpenTelemetryMeterProvider((_, meterProviderBuilder) =>
+    {
+        meterProviderBuilder
+            .AddMeter(Telemetry.MeterName);
+    });
+
+    builder.Services.Configure<AspNetCoreTraceInstrumentationOptions>(options =>
+    {
+        options.RecordException = true;
+        options.Filter = httpContext =>
+        {
+            var path = httpContext.Request.Path;
+
+            return !(path.StartsWithSegments("/health")
+                || path.StartsWithSegments("/debug")
+                || path.StartsWithSegments("/favicon.ico"));
+        };
+    });
+
+    builder.Services.Configure<HttpClientTraceInstrumentationOptions>(options =>
+    {
+        options.RecordException = true;
+    });
+
+    builder.Logging.AddOpenTelemetry(options =>
+    {
+        options.IncludeScopes = true;
+        options.IncludeFormattedMessage = true;
+        options.ParseStateValues = true;
+    });
 
     startupLogger.LogInformation("Application Insights telemetry enabled.");
 }

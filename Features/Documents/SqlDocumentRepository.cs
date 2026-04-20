@@ -1,5 +1,6 @@
 using Azure;
 using Azure.Storage.Blobs;
+using System.Diagnostics;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents.Data;
 using EmployeeDocumentsViewer.Features.Documents.List;
@@ -23,6 +24,21 @@ public sealed class SqlDocumentRepository(
         int length,
         CancellationToken cancellationToken)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("documents.search", ActivityKind.Internal);
+
+        var companyKey = company.ToString();
+        var hasSearchTerm = !string.IsNullOrWhiteSpace(searchTerm);
+
+        activity?.SetTag("company.key", companyKey);
+        activity?.SetTag("search.term.present", hasSearchTerm);
+        activity?.SetTag("sort.column", sortColumn.ToString());
+        activity?.SetTag("sort.descending", descending);
+        activity?.SetTag("page.start", Math.Max(0, start));
+        activity?.SetTag("page.length", Math.Clamp(length, 1, 500));
+
+        Telemetry.SearchRequests.Add(1,
+            new KeyValuePair<string, object?>("company.key", companyKey));
+
         var connectionString = _connectionStringResolver.GetSqlConnectionString(company);
 
         var options = new DbContextOptionsBuilder<DocumentCatalogDbContext>()
@@ -30,8 +46,6 @@ public sealed class SqlDocumentRepository(
             .Options;
 
         await using var context = new DocumentCatalogDbContext(options);
-
-        var companyKey = company.ToString();
 
         var query = context.EmployeeDocumentCatalog
             .AsNoTracking()
@@ -98,6 +112,10 @@ public sealed class SqlDocumentRepository(
                 CompanyKey: companyKey))
             .ToListAsync(cancellationToken);
 
+        activity?.SetTag("search.total_count", totalCount);
+        activity?.SetTag("search.filtered_count", filteredCount);
+        activity?.SetTag("search.result_count", page.Count);
+
         return (totalCount, filteredCount, page);
     }
 
@@ -130,8 +148,23 @@ public sealed class SqlDocumentRepository(
         string blobName,
         CancellationToken cancellationToken)
     {
+        using var activity = Telemetry.ActivitySource.StartActivity("documents.open", ActivityKind.Internal);
+
+        var companyKey = company.ToString();
+        var extension = Path.GetExtension(blobName).ToLowerInvariant();
+
+        activity?.SetTag("company.key", companyKey);
+        activity?.SetTag("blob.extension", extension);
+        activity?.SetTag("blob.name.present", !string.IsNullOrWhiteSpace(blobName));
+
+        Telemetry.OpenRequests.Add(1,
+            new KeyValuePair<string, object?>("company.key", companyKey));
+
         if (string.IsNullOrWhiteSpace(blobName))
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, "Blob name was empty.");
             return null;
+        }
 
         var container = CreateDocumentsContainerClient(company);
         var blobClient = container.GetBlobClient(blobName);
@@ -145,6 +178,9 @@ public sealed class SqlDocumentRepository(
                 ? download.Value.Details.ContentType
                 : GetContentTypeFromFileName(blobName);
 
+            activity?.SetTag("blob.length", download.Value.Details.ContentLength);
+            activity?.SetTag("blob.content_type", contentType);
+
             return new BlobDocumentStream
             {
                 BlobName = blobName,
@@ -155,6 +191,11 @@ public sealed class SqlDocumentRepository(
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
+            Telemetry.OpenNotFound.Add(1,
+                new KeyValuePair<string, object?>("company.key", companyKey));
+
+            activity?.SetStatus(ActivityStatusCode.Error, "Blob not found.");
+
             _logger.LogWarning(
                 "Blob not found for company {Company}, blob {BlobName}.",
                 company,
