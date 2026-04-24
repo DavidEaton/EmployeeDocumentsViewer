@@ -12,23 +12,9 @@ public sealed class Endpoint(IDocumentRepository repository)
 
     public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<Company>(request.CompanyKey, ignoreCase: true, out var company))
-        {
-            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await HttpContext.Response.WriteAsJsonAsync(
-                new { error = $"Invalid company key '{request.CompanyKey}'." },
-                cancellationToken);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(request.BlobName))
-        {
-            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await HttpContext.Response.WriteAsJsonAsync(
-                new { error = "Missing blobName query string value." },
-                cancellationToken);
-            return;
-        }
+        var company = Enum.Parse<Company>(
+            request.CompanyKey,
+            ignoreCase: true);
 
         var document = await repository.OpenReadAsync(
             company,

@@ -77,8 +77,8 @@ public sealed class SqlDocumentRepository(
             query = query.Where(row =>
                 EF.Functions.Like(row.BlobName, term)
                 || EF.Functions.Like(row.DocumentType, term)
-                || (row.EmployeeName is not null && EF.Functions.Like(row.EmployeeName, term))
-                || (row.Department is not null && EF.Functions.Like(row.Department, term))
+                || (row.EmployeeName != null && EF.Functions.Like(row.EmployeeName, term))
+                || (row.Department != null && EF.Functions.Like(row.Department, term))
                 || (employeeIdSearch.HasValue && row.EmployeeId == employeeIdSearch.Value));
         }
 
