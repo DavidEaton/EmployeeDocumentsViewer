@@ -52,28 +52,17 @@ public sealed class SqlDocumentRepository(
 
         var query = context.EmployeeDocumentCatalog
             .AsNoTracking()
-            .Where(catalog => !catalog.IsDeleted && catalog.CompanyKey == companyKey)
-            .GroupJoin(
-                context.EmployeeDocumentsLookup.AsNoTracking(),
-                catalog => catalog.EmployeeId,
-                employee => employee.Id,
-                (catalog, employeeGroup) => new
-                {
-                    catalog,
-                    employeeGroup
-                })
-            .SelectMany(
-                joined => joined.employeeGroup.DefaultIfEmpty(),
-                (joined, employee) => new DocumentQueryRow
-                {
-                    BlobName = joined.catalog.BlobName,
-                    EmployeeId = joined.catalog.EmployeeId,
-                    Employee = employee != null ? employee.NameLastFirst : null,
-                    Department = employee != null ? employee.HomeDepartment : null,
-                    DocumentType = joined.catalog.DocumentTypeDisplay,
-                    UpdatedUtc = joined.catalog.UpdatedUtc ?? joined.catalog.BlobLastModifiedUtc,
-                    Active = employee != null && employee.Active
-                });
+            .Where(catalog => !catalog.IsDeleted)
+            .Select(catalog => new DocumentQueryRow
+            {
+                BlobName = catalog.BlobName,
+                EmployeeId = catalog.EmployeeId,
+                EmployeeName = catalog.EmployeeName,
+                Department = catalog.HomeDepartment,
+                DocumentType = catalog.DocumentTypeDisplay,
+                UpdatedUtc = catalog.UpdatedUtc ?? catalog.BlobLastModifiedUtc,
+                Active = catalog.EmployeeActive
+            });
 
         var totalCount = await query.CountAsync(cancellationToken);
 
@@ -88,8 +77,8 @@ public sealed class SqlDocumentRepository(
             query = query.Where(row =>
                 EF.Functions.Like(row.BlobName, term)
                 || EF.Functions.Like(row.DocumentType, term)
-                || (row.Employee != null && EF.Functions.Like(row.Employee, term))
-                || (row.Department != null && EF.Functions.Like(row.Department, term))
+                || (row.EmployeeName is not null && EF.Functions.Like(row.EmployeeName, term))
+                || (row.Department is not null && EF.Functions.Like(row.Department, term))
                 || (employeeIdSearch.HasValue && row.EmployeeId == employeeIdSearch.Value));
         }
 
@@ -105,14 +94,13 @@ public sealed class SqlDocumentRepository(
             .Select(row => new DocumentReadRow(
                 BlobName: row.BlobName,
                 EmployeeId: row.EmployeeId,
-                Employee: row.Employee ?? row.EmployeeId.ToString(),
+                EmployeeName: row.EmployeeName ?? row.EmployeeId.ToString(),
                 Department: row.Department ?? string.Empty,
                 DocumentType: row.DocumentType,
                 Year: row.UpdatedUtc.HasValue ? row.UpdatedUtc.Value.Year : null,
                 Active: row.Active,
                 TerminationDate: null,
-                UpdatedUtc: row.UpdatedUtc,
-                CompanyKey: companyKey))
+                UpdatedUtc: row.UpdatedUtc))
             .ToListAsync(cancellationToken);
 
         activity?.SetTag("search.total_count", totalCount);
@@ -131,8 +119,8 @@ public sealed class SqlDocumentRepository(
         {
             (DocumentSortColumn.EmployeeId, false) => query.OrderBy(x => x.EmployeeId),
             (DocumentSortColumn.EmployeeId, true) => query.OrderByDescending(x => x.EmployeeId),
-            (DocumentSortColumn.Employee, false) => query.OrderBy(x => x.Employee),
-            (DocumentSortColumn.Employee, true) => query.OrderByDescending(x => x.Employee),
+            (DocumentSortColumn.Employee, false) => query.OrderBy(x => x.EmployeeName),
+            (DocumentSortColumn.Employee, true) => query.OrderByDescending(x => x.EmployeeName),
             (DocumentSortColumn.Department, false) => query.OrderBy(x => x.Department),
             (DocumentSortColumn.Department, true) => query.OrderByDescending(x => x.Department),
             (DocumentSortColumn.DocumentType, false) => query.OrderBy(x => x.DocumentType),
@@ -242,7 +230,7 @@ public sealed class SqlDocumentRepository(
     {
         public string BlobName { get; init; } = string.Empty;
         public int EmployeeId { get; init; }
-        public string? Employee { get; init; }
+        public string? EmployeeName { get; init; }
         public string? Department { get; init; }
         public string DocumentType { get; init; } = string.Empty;
         public DateTimeOffset? UpdatedUtc { get; init; }

@@ -14,7 +14,13 @@ public sealed class Endpoint(IDocumentRepository repository)
 
     public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
     {
-        var company = Enum.Parse<Company>(request.CompanyKey, ignoreCase: true);
+        if (!Enum.TryParse<Company>(request.CompanyKey, ignoreCase: true, out var company))
+        {
+            await Send.BadRequestAsync(
+                new { error = $"Invalid company key '{request.CompanyKey}'." },
+                cancellationToken);
+            return;
+        }
 
         var sortColumn = DocumentSortParser.ParseOrDefault(request.SortColumn);
         var descending = DocumentSortParser.IsDescending(request.SortDirection);

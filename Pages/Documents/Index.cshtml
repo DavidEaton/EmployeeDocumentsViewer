@@ -154,7 +154,7 @@
                     const updated = row.updatedUtc ? new Date(row.updatedUtc).toLocaleString() : '';
 
                     return `<tr>
-                        <td>${escapeHtml(row.employee || '')}</td>
+                        <td>${escapeHtml(row.employeeName || '')}</td>
                         <td>${escapeHtml(row.department || '')}</td>
                         <td>${escapeHtml(row.documentType || '')}</td>
                         <td>${escapeHtml(updated)}</td>

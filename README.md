@@ -159,13 +159,12 @@ The connection string is validated at startup; invalid values disable telemetry.
 `DocumentCatalogDbContext` uses:
 
 - `Common.EmployeeDocumentCatalog` (table)
-- `HR.EmployeeDocumentsLookup` (view)
 
 Query behavior in `SqlDocumentRepository.SearchAsync`:
 
 - filters to `IsDeleted = 0`
 - database selected by selected `CompanyKey`
-- left joins employee lookup on employee ID
+- reads employee metadata directly from the catalog table
 - applies optional search over blob/document/employee/department (+ numeric employee ID match)
 - applies server-side sorting
 - applies paging with max page size clamp of 500
@@ -173,12 +172,11 @@ Query behavior in `SqlDocumentRepository.SearchAsync`:
 Returned row model includes:
 
 - BlobName
-- EmployeeId / Employee
+- EmployeeId / EmployeeName
 - Department
 - DocumentType
 - UpdatedUtc (fallback to BlobLastModifiedUtc)
 - Active
-- CompanyKey
 
 ---
 
@@ -219,11 +217,10 @@ Response shape:
     {
       "blobName": "...",
       "employeeId": 123,
-      "employee": "Doe, Jane",
+      "employeeName": "Doe, Jane",
       "department": "HR",
       "documentType": "W-2",
-      "updatedUtc": "2026-01-10T15:22:00+00:00",
-      "companyKey": "CII"
+      "updatedUtc": "2026-01-10T15:22:00+00:00"
     }
   ]
 }
