@@ -1,10 +1,10 @@
-if object_id('Common.EmployeeDocumentCatalog', 'U') is not null
+if object_id('HR.EmployeeDocumentCatalog', 'U') is not null
 begin
-    drop table Common.EmployeeDocumentCatalog;
+    drop table HR.EmployeeDocumentCatalog;
 end
 go
 
-create table Common.EmployeeDocumentCatalog
+create table HR.EmployeeDocumentCatalog
 (
     Id                      bigint              not null identity(1,1),
     BlobName                nvarchar(512)       not null,
@@ -30,21 +30,21 @@ create table Common.EmployeeDocumentCatalog
 go
 
 create unique nonclustered index UX_EmployeeDocumentCatalog_Company_BlobHash
-    on Common.EmployeeDocumentCatalog (BlobNameHash);
+    on HR.EmployeeDocumentCatalog (BlobNameHash);
 go
 
 create index IX_EmployeeDocumentCatalog_Company_Employee
-    on Common.EmployeeDocumentCatalog (EmployeeId);
+    on HR.EmployeeDocumentCatalog (EmployeeId);
 go
 
 create index IX_EmployeeDocumentCatalog_Company_DocumentType
-    on Common.EmployeeDocumentCatalog (DocumentTypeDisplay);
+    on HR.EmployeeDocumentCatalog (DocumentTypeDisplay);
 go
 
 create index IX_EmployeeDocumentCatalog_Company_UpdatedUtc
-    on Common.EmployeeDocumentCatalog (UpdatedUtc desc);
+    on HR.EmployeeDocumentCatalog (UpdatedUtc desc);
 go
 
 create index IX_EmployeeDocumentCatalog_Company_IsDeleted
-    on Common.EmployeeDocumentCatalog (IsDeleted);
+    on HR.EmployeeDocumentCatalog (IsDeleted);
 go
