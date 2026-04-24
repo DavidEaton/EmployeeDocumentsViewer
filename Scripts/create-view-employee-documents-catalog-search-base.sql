@@ -23,7 +23,7 @@ as
         emp.Active,
         0 as TerminationDate
     -- term.TerminationDate
-    from Common.EmployeeDocumentCatalog d
+    from HR.EmployeeDocumentCatalog d
         inner join HR.EmployeeDocumentsLookup emp
         on emp.Id = d.EmployeeId
     -- outer apply

@@ -14,7 +14,7 @@ The application is intentionally split into **metadata query in SQL** and **cont
 
 1. Renders a Razor Pages UI at `/documents`.
 2. Calls a FastEndpoints API (`POST /api/documents/list`) for paging/filtering/sorting.
-3. Reads document metadata from SQL (`Common.EmployeeDocumentCatalog` + `HR.EmployeeDocumentsLookup`).
+3. Reads document metadata from SQL (`HR.EmployeeDocumentCatalog` + `HR.EmployeeDocumentsLookup`).
 4. Opens files through `GET /api/documents/open/{companyKey}?blobName=...` by streaming blobs from the `hrdocs` container.
 
 ---
@@ -158,7 +158,7 @@ The connection string is validated at startup; invalid values disable telemetry.
 
 `DocumentCatalogDbContext` uses:
 
-- `Common.EmployeeDocumentCatalog` (table)
+- `HR.EmployeeDocumentCatalog` (table)
 
 Query behavior in `SqlDocumentRepository.SearchAsync`:
 

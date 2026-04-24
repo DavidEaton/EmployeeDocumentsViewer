@@ -11,7 +11,7 @@ public sealed class DocumentCatalogDbContext(DbContextOptions<DocumentCatalogDbC
     {
         modelBuilder.Entity<EmployeeDocumentCatalog>(entity =>
         {
-            entity.ToTable("EmployeeDocumentCatalog", "Common");
+            entity.ToTable("EmployeeDocumentCatalog", "HR");
             entity.HasKey(x => x.Id);
         });
     }
