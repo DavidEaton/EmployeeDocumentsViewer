@@ -37,7 +37,7 @@ public sealed class SqlDocumentRepository(
         activity?.SetTag("sort.column", sortColumn.ToString());
         activity?.SetTag("sort.descending", descending);
         activity?.SetTag("page.start", Math.Max(0, start));
-        activity?.SetTag("page.length", Math.Clamp(length, 1, 500));
+        activity?.SetTag("page.length", Math.Clamp(length, 1, 100));
 
         Telemetry.SearchRequests.Add(1,
             new KeyValuePair<string, object?>("company.key", companyKey));
@@ -86,7 +86,7 @@ public sealed class SqlDocumentRepository(
 
         query = ApplySorting(query, sortColumn, descending);
 
-        var pageSize = Math.Clamp(length, 1, 500);
+        var pageSize = Math.Clamp(length, 1, 100);
 
         var page = await query
             .Skip(Math.Max(0, start))

@@ -27,7 +27,6 @@ builder.Logging.AddSimpleConsole(options =>
     options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff zzz ";
     options.IncludeScopes = true;
 });
-builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;

@@ -167,7 +167,7 @@ Query behavior in `SqlDocumentRepository.SearchAsync`:
 - reads employee metadata directly from the catalog table
 - applies optional search over blob/document/employee/department (+ numeric employee ID match)
 - applies server-side sorting
-- applies paging with max page size clamp of 500
+- applies paging with max page size clamp of 100
 
 Returned row model includes:
 
