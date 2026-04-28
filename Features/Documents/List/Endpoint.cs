@@ -14,20 +14,30 @@ public sealed class Endpoint(IDocumentRepository repository)
 
     public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
     {
-        var company = Enum.Parse<Company>(
-            request.CompanyKey,
-            ignoreCase: true);
+        if (!Enum.TryParse<Company>(
+                request.CompanyKey,
+                ignoreCase: true,
+                out var company))
+        {
+            await Send.ErrorsAsync(
+                statusCode: StatusCodes.Status400BadRequest,
+                cancellation: cancellationToken);
+
+            return;
+        }
 
         var sortColumn = DocumentSortParser.ParseOrDefault(request.SortColumn);
         var descending = DocumentSortParser.IsDescending(request.SortDirection);
+        var length = Math.Clamp(request.Length, 1, 100);
+        var start = Math.Max(0, request.Start);
 
         var (totalCount, filteredCount, items) = await _repository.SearchAsync(
             company,
             request.SearchTerm,
             sortColumn,
             descending,
-            request.Start,
-            request.Length,
+            start,
+            length,
             cancellationToken);
 
         var response = new Response
