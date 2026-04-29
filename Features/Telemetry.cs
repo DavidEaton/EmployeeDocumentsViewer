@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-namespace EmployeeDocumentsViewer;
+namespace EmployeeDocumentsViewer.Features;
 
 public static class Telemetry
 {

@@ -293,7 +293,6 @@ Open:
 
 ## Known implementation notes
 
-- `Storage:DocumentsContainerName` exists in configuration options, but `SqlDocumentRepository` currently uses a hard-coded container name (`hrdocs`).
 - The project references EF Core `10.0.0-preview` packages, so SDK/package compatibility should be validated in CI/build agents.
 
 ---
