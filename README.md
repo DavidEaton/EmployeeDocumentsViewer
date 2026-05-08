@@ -291,12 +291,6 @@ Open:
 
 ---
 
-## Known implementation notes
-
-- The project references EF Core `10.0.0-preview` packages, so SDK/package compatibility should be validated in CI/build agents.
-
----
-
 ## License
 
 Internal use only.
