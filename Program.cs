@@ -42,7 +42,7 @@ Console.WriteLine($"[EmployeeDocumentsViewer] Effective log path: {effectiveLogP
 
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
-    .MinimumLevel.Debug()
+    .MinimumLevel.Warning()
     .WriteTo.Console(
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj} {Properties:j}{NewLine}{Exception}")
     .WriteTo.File(
