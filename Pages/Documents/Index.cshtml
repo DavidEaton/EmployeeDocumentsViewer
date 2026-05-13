@@ -44,15 +44,11 @@
                 const lastRow = Math.min(firstRow + currentRow - 1, totalRows);
                 return `Showing ${firstRow} to ${lastRow} of ${totalRows.toLocaleString()} entries`;
             },
-            paginationDataReceived: {
-                last_page: 'lastPage',
-                data: 'data'
-            },
             ajaxURL: '/api/documents/list',
             ajaxConfig: 'POST',
             ajaxContentType: 'json',
             ajaxRequestFunc: async (url, config, params) => {
-                if (!companySelect.value) return { lastPage: 1, data: [] };
+                if (!companySelect.value) return { last_page: 1, data: [] };
 
                 const payload = {
                     companyKey: companySelect.value,
