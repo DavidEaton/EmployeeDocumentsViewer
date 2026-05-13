@@ -24,6 +24,7 @@
 @section Scripts
 {
     <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script>
         const companySelect = document.getElementById('companySelect');
@@ -99,7 +100,19 @@
                 { title: 'Home Department', field: 'department', headerFilter: 'input', headerSort: true },
                 { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true },
                 { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true },
-                { title: 'Termination Date', field: 'terminationDate', formatter: 'datetime', formatterParams: { outputFormat: 'yyyy-MM-dd' }, headerFilter: 'input', headerSort: true }
+                {
+                    title: 'Termination Date',
+                    field: 'terminationDate',
+                    formatter: (cell) => {
+                        const value = cell.getValue();
+                        if (!value) return '';
+
+                        const parsed = luxon.DateTime.fromISO(String(value));
+                        return parsed.isValid ? parsed.toFormat('yyyy-MM-dd') : String(value);
+                    },
+                    headerFilter: 'input',
+                    headerSort: true
+                }
             ]
         });
 
