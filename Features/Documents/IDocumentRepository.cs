@@ -6,11 +6,10 @@ public interface IDocumentRepository
 {
     Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentReadRow> Items)> SearchAsync(
         Company company,
-        string? searchTerm,
-        DocumentSortColumn sortColumn,
-        bool descending,
-        int start,
-        int length,
+        int page,
+        int size,
+        IReadOnlyList<FilterDescriptor> filters,
+        IReadOnlyList<SortDescriptor> sorters,
         CancellationToken cancellationToken);
 
     Task<BlobDocumentStream?> OpenReadAsync(
