@@ -1,7 +1,11 @@
 ﻿<?xml version="1.0" encoding="UTF-8" ?>
 <Project Sdk="Microsoft.NET.Sdk.Web">
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <!-- VS Code/Roslyn design-time builds can run on an older SDK than the CLI.
+             Falling back to net8.0 for DesignTimeBuild keeps package references (e.g., Serilog)
+             resolvable in the editor while normal builds still target net10.0. -->
+        <TargetFramework Condition="'$(DesignTimeBuild)' == 'true'">net8.0</TargetFramework>
+        <TargetFramework Condition="'$(DesignTimeBuild)' != 'true'">net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>813e60bf-98ed-46b0-aebd-80b23dd2e2ba</UserSecretsId>
