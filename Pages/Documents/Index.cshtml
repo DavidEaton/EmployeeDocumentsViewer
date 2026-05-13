@@ -50,6 +50,10 @@
             ajaxRequestFunc: async (url, config, params) => {
                 if (!companySelect.value) return { last_page: 1, data: [] };
 
+                const tabulatorFilters = Array.isArray(params.filters)
+                    ? params.filters
+                    : (params.filter ? [params.filter] : []);
+
                 const payload = {
                     companyKey: companySelect.value,
                     page: params.page ?? 1,
@@ -57,9 +61,12 @@
                     sorters: Array.isArray(params.sorters)
                         ? params.sorters
                         : (params.sorter ? [params.sorter] : []),
-                    filters: Array.isArray(params.filters)
-                        ? params.filters
-                        : (params.filter ? [params.filter] : [])
+                    filters: tabulatorFilters
+                        .filter(f => f && typeof f.field === 'string')
+                        .map(f => ({
+                            field: f.field,
+                            value: f.value == null ? null : String(f.value)
+                        }))
                 };
 
                 const response = await fetch(url, {
