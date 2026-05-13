@@ -7,6 +7,5 @@ public sealed record DocumentReadRow(
     string Department,
     string DocumentType,
     int? Year,
-    bool Active,
     DateTime? TerminationDate,
     DateTimeOffset? UpdatedUtc);

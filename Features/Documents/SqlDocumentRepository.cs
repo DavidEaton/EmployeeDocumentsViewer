@@ -20,178 +20,116 @@ public sealed class SqlDocumentRepository(
 
     public async Task<(int TotalCount, int FilteredCount, IReadOnlyList<DocumentReadRow> Items)> SearchAsync(
         Company company,
-        string? searchTerm,
-        DocumentSortColumn sortColumn,
-        bool descending,
-        int start,
-        int length,
+        int page,
+        int size,
+        IReadOnlyList<FilterDescriptor> filters,
+        IReadOnlyList<SortDescriptor> sorters,
         CancellationToken cancellationToken)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("documents.search", ActivityKind.Internal);
 
-        var companyKey = company.ToString();
-        var hasSearchTerm = !string.IsNullOrWhiteSpace(searchTerm);
-
-        activity?.SetTag("company.key", companyKey);
-        activity?.SetTag("search.term.present", hasSearchTerm);
-        activity?.SetTag("sort.column", sortColumn.ToString());
-        activity?.SetTag("sort.descending", descending);
-        activity?.SetTag("page.start", Math.Max(0, start));
-        activity?.SetTag("page.length", Math.Clamp(length, 1, 100));
-
-        Telemetry.SearchRequests.Add(1,
-            new KeyValuePair<string, object?>("company.key", companyKey));
-
-        var connectionString = _connectionStringResolver.GetSqlConnectionString(company);
-
         var options = new DbContextOptionsBuilder<DocumentCatalogDbContext>()
-            .UseSqlServer(connectionString)
+            .UseSqlServer(_connectionStringResolver.GetSqlConnectionString(company))
             .Options;
 
         await using var context = new DocumentCatalogDbContext(options);
 
-        var query = context.EmployeeDocumentCatalog
+        var baseQuery = context.Documents
             .AsNoTracking()
-            .Where(catalog => !catalog.IsDeleted)
-            .Select(catalog => new DocumentQueryRow
-            {
-                BlobName = catalog.BlobName,
-                EmployeeId = catalog.EmployeeId,
-                EmployeeName = catalog.EmployeeName,
-                Department = catalog.HomeDepartment,
-                DocumentType = catalog.DocumentTypeDisplay,
-                UpdatedUtc = catalog.UpdatedUtc ?? catalog.BlobLastModifiedUtc,
-                Active = catalog.EmployeeActive
-            });
+            .Select(x => new DocumentReadRow(
+                BlobName: string.Empty,
+                EmployeeId: x.EmployeeId,
+                EmployeeName: x.EmployeeName,
+                Department: x.HomeDepartment,
+                DocumentType: x.DocumentTypeDisplay,
+                Year: x.Year,
+                TerminationDate: x.TerminationDate,
+                UpdatedUtc: null));
 
-        var totalCount = await query.CountAsync(cancellationToken);
+        var totalCount = await baseQuery.CountAsync(cancellationToken);
+        var filtered = ApplyFilters(baseQuery, filters);
+        var filteredCount = await filtered.CountAsync(cancellationToken);
+        var sorted = ApplySorting(filtered, sorters);
 
-        var normalizedSearchTerm = searchTerm?.Trim();
-        if (!string.IsNullOrWhiteSpace(normalizedSearchTerm))
-        {
-            var term = $"%{normalizedSearchTerm}%";
-            var employeeIdSearch = int.TryParse(normalizedSearchTerm, out var parsedEmployeeId)
-                ? parsedEmployeeId
-                : (int?)null;
-
-            query = query.Where(row =>
-                EF.Functions.Like(row.BlobName, term)
-                || EF.Functions.Like(row.DocumentType, term)
-                || (row.EmployeeName != null && EF.Functions.Like(row.EmployeeName, term))
-                || (row.Department != null && EF.Functions.Like(row.Department, term))
-                || (employeeIdSearch.HasValue && row.EmployeeId == employeeIdSearch.Value));
-        }
-
-        var filteredCount = await query.CountAsync(cancellationToken);
-
-        query = ApplySorting(query, sortColumn, descending);
-
-        var pageSize = Math.Clamp(length, 1, 100);
-
-        var page = await query
-            .Skip(Math.Max(0, start))
-            .Take(pageSize)
-            .Select(row => new DocumentReadRow(
-                BlobName: row.BlobName,
-                EmployeeId: row.EmployeeId,
-                EmployeeName: row.EmployeeName ?? row.EmployeeId.ToString(),
-                Department: row.Department ?? string.Empty,
-                DocumentType: row.DocumentType,
-                Year: row.UpdatedUtc.HasValue ? row.UpdatedUtc.Value.Year : null,
-                Active: row.Active,
-                TerminationDate: null,
-                UpdatedUtc: row.UpdatedUtc))
+        var rows = await sorted
+            .Skip((page - 1) * size)
+            .Take(size)
             .ToListAsync(cancellationToken);
 
-        activity?.SetTag("search.total_count", totalCount);
-        activity?.SetTag("search.filtered_count", filteredCount);
-        activity?.SetTag("search.result_count", page.Count);
-
-        return (totalCount, filteredCount, page);
+        return (totalCount, filteredCount, rows);
     }
 
-    private static IQueryable<DocumentQueryRow> ApplySorting(
-        IQueryable<DocumentQueryRow> query,
-        DocumentSortColumn sortColumn,
-        bool descending)
+    private static IQueryable<DocumentReadRow> ApplyFilters(IQueryable<DocumentReadRow> query, IReadOnlyList<FilterDescriptor> filters)
     {
-        return (sortColumn, descending) switch
+        foreach (var filter in filters.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
         {
-            (DocumentSortColumn.EmployeeId, false) => query.OrderBy(x => x.EmployeeId),
-            (DocumentSortColumn.EmployeeId, true) => query.OrderByDescending(x => x.EmployeeId),
-            (DocumentSortColumn.Employee, false) => query.OrderBy(x => x.EmployeeName),
-            (DocumentSortColumn.Employee, true) => query.OrderByDescending(x => x.EmployeeName),
-            (DocumentSortColumn.Department, false) => query.OrderBy(x => x.Department),
-            (DocumentSortColumn.Department, true) => query.OrderByDescending(x => x.Department),
-            (DocumentSortColumn.DocumentType, false) => query.OrderBy(x => x.DocumentType),
-            (DocumentSortColumn.DocumentType, true) => query.OrderByDescending(x => x.DocumentType),
-            (DocumentSortColumn.Active, false) => query.OrderBy(x => x.Active),
-            (DocumentSortColumn.Active, true) => query.OrderByDescending(x => x.Active),
-            (DocumentSortColumn.Year, false) => query.OrderBy(x => x.UpdatedUtc),
-            (DocumentSortColumn.Year, true) => query.OrderByDescending(x => x.UpdatedUtc),
-            _ when descending => query.OrderByDescending(x => x.UpdatedUtc),
-            _ => query.OrderBy(x => x.UpdatedUtc)
+            var value = filter.Value!.Trim();
+            var term = $"%{value}%";
+            switch (filter.Field.ToLowerInvariant())
+            {
+                case "employeeid" when int.TryParse(value, out var employeeId):
+                    query = query.Where(x => x.EmployeeId == employeeId);
+                    break;
+                case "employeename":
+                    query = query.Where(x => EF.Functions.Like(x.EmployeeName, term));
+                    break;
+                case "department":
+                case "homedepartment":
+                    query = query.Where(x => EF.Functions.Like(x.Department, term));
+                    break;
+                case "documenttype":
+                    query = query.Where(x => EF.Functions.Like(x.DocumentType, term));
+                    break;
+                case "year" when int.TryParse(value, out var year):
+                    query = query.Where(x => x.Year == year);
+                    break;
+            }
+        }
+
+        return query;
+    }
+
+    private static IQueryable<DocumentReadRow> ApplySorting(IQueryable<DocumentReadRow> query, IReadOnlyList<SortDescriptor> sorters)
+    {
+        var sorter = sorters.FirstOrDefault();
+        var desc = string.Equals(sorter?.Dir, "desc", StringComparison.OrdinalIgnoreCase);
+
+        return (sorter?.Field?.ToLowerInvariant(), desc) switch
+        {
+            ("employeeid", false) => query.OrderBy(x => x.EmployeeId),
+            ("employeeid", true) => query.OrderByDescending(x => x.EmployeeId),
+            ("employeename", false) => query.OrderBy(x => x.EmployeeName),
+            ("employeename", true) => query.OrderByDescending(x => x.EmployeeName),
+            ("department", false) => query.OrderBy(x => x.Department),
+            ("department", true) => query.OrderByDescending(x => x.Department),
+            ("documenttype", false) => query.OrderBy(x => x.DocumentType),
+            ("documenttype", true) => query.OrderByDescending(x => x.DocumentType),
+            ("year", false) => query.OrderBy(x => x.Year),
+            ("year", true) => query.OrderByDescending(x => x.Year),
+            _ => query.OrderBy(x => x.EmployeeName)
         };
     }
 
-    public async Task<BlobDocumentStream?> OpenReadAsync(
-        Company company,
-        string blobName,
-        CancellationToken cancellationToken)
+    public async Task<BlobDocumentStream?> OpenReadAsync(Company company, string blobName, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.ActivitySource.StartActivity("documents.open", ActivityKind.Internal);
-
-        var companyKey = company.ToString();
-        var extension = Path.GetExtension(blobName).ToLowerInvariant();
-
-        activity?.SetTag("company.key", companyKey);
-        activity?.SetTag("blob.extension", extension);
-        activity?.SetTag("blob.name.present", !string.IsNullOrWhiteSpace(blobName));
-
-        Telemetry.OpenRequests.Add(1,
-            new KeyValuePair<string, object?>("company.key", companyKey));
-
-        if (string.IsNullOrWhiteSpace(blobName))
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, "Blob name was empty.");
-            return null;
-        }
-
         var container = CreateDocumentsContainerClient(company);
         var blobClient = container.GetBlobClient(blobName);
 
         try
         {
-            var download = await blobClient
-                .DownloadStreamingAsync(cancellationToken: cancellationToken);
-
-            var contentType = !string.IsNullOrWhiteSpace(download.Value.Details.ContentType)
-                ? download.Value.Details.ContentType
-                : GetContentTypeFromFileName(blobName);
-
-            activity?.SetTag("blob.length", download.Value.Details.ContentLength);
-            activity?.SetTag("blob.content_type", contentType);
-
+            var download = await blobClient.DownloadStreamingAsync(cancellationToken: cancellationToken);
             return new BlobDocumentStream
             {
                 BlobName = blobName,
                 Content = download.Value.Content,
                 Length = download.Value.Details.ContentLength,
-                ContentType = contentType
+                ContentType = download.Value.Details.ContentType ?? "application/octet-stream"
             };
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
-            Telemetry.OpenNotFound.Add(1,
-                new KeyValuePair<string, object?>("company.key", companyKey));
-
-            activity?.SetStatus(ActivityStatusCode.Error, "Blob not found.");
-
-            _logger.LogWarning(
-                "Blob not found for company {Company}, blob {BlobName}.",
-                company,
-                blobName);
-
+            _logger.LogWarning("Blob not found for company {Company}, blob {BlobName}.", company, blobName);
             return null;
         }
     }
@@ -199,41 +137,6 @@ public sealed class SqlDocumentRepository(
     private BlobContainerClient CreateDocumentsContainerClient(Company company)
     {
         var connectionString = _connectionStringResolver.GetBlobStorageConnectionString(company);
-        var containerName = _storageOptions.DocumentsContainerName;
-
-        if (string.IsNullOrWhiteSpace(containerName))
-        {
-            throw new InvalidOperationException(
-                $"{nameof(StorageOptions.DocumentsContainerName)} is missing.");
-        }
-
-        return new BlobContainerClient(connectionString, containerName);
-    }
-
-    private static string GetContentTypeFromFileName(string blobName)
-    {
-        var extension = Path.GetExtension(blobName);
-
-        return extension.ToLowerInvariant() switch
-        {
-            ".pdf" => "application/pdf",
-            ".jpg" => "image/jpeg",
-            ".jpeg" => "image/jpeg",
-            ".png" => "image/png",
-            ".tif" => "image/tiff",
-            ".tiff" => "image/tiff",
-            _ => "application/octet-stream"
-        };
-    }
-
-    private sealed class DocumentQueryRow
-    {
-        public string BlobName { get; init; } = string.Empty;
-        public int EmployeeId { get; init; }
-        public string? EmployeeName { get; init; }
-        public string? Department { get; init; }
-        public string DocumentType { get; init; } = string.Empty;
-        public DateTimeOffset? UpdatedUtc { get; init; }
-        public bool Active { get; init; }
+        return new BlobContainerClient(connectionString, _storageOptions.DocumentsContainerName);
     }
 }

@@ -5,8 +5,6 @@ namespace EmployeeDocumentsViewer.Features.Documents.List;
 public sealed class Endpoint(IDocumentRepository repository)
     : Endpoint<Request, Response>
 {
-    private readonly IDocumentRepository _repository = repository;
-
     public override void Configure()
     {
         Post("/api/documents/list");
@@ -14,40 +12,26 @@ public sealed class Endpoint(IDocumentRepository repository)
 
     public override async Task HandleAsync(Request request, CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<Company>(
-                request.CompanyKey,
-                ignoreCase: true,
-                out var company))
+        if (!Enum.TryParse<Company>(request.CompanyKey, true, out var company))
         {
-            await Send.ErrorsAsync(
-                statusCode: StatusCodes.Status400BadRequest,
-                cancellation: cancellationToken);
-
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status400BadRequest, cancellation: cancellationToken);
             return;
         }
 
-        var sortColumn = DocumentSortParser.ParseOrDefault(request.SortColumn);
-        var descending = DocumentSortParser.IsDescending(request.SortDirection);
-        var length = Math.Clamp(request.Length, 1, 100);
-        var start = Math.Max(0, request.Start);
-
-        var (totalCount, filteredCount, items) = await _repository.SearchAsync(
+        var (totalCount, filteredCount, items) = await repository.SearchAsync(
             company,
-            request.SearchTerm,
-            sortColumn,
-            descending,
-            start,
-            length,
+            request.Page,
+            request.Size,
+            request.Filters,
+            request.Sorters,
             cancellationToken);
 
-        var response = new Response
+        await Send.OkAsync(new Response
         {
-            Draw = request.Draw,
-            RecordsTotal = totalCount,
-            RecordsFiltered = filteredCount,
+            TotalCount = totalCount,
+            FilteredCount = filteredCount,
+            LastPage = Math.Max(1, (int)Math.Ceiling(filteredCount / (double)request.Size)),
             Data = items
-        };
-
-        await Send.OkAsync(response, cancellation: cancellationToken);
+        }, cancellation: cancellationToken);
     }
 }
