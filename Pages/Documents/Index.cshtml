@@ -33,7 +33,17 @@
             paginationMode: 'remote',
             filterMode: 'remote',
             sortMode: 'remote',
-            paginationSize: 50,
+            paginationSize: 25,
+            paginationSizeSelector: [10, 25, 50, 100],
+            paginationCounter: function (pageSize, currentRow, currentPage, totalRows, totalPages) {
+                if (totalRows === 0) {
+                    return 'Showing 0 to 0 of 0 entries';
+                }
+
+                const firstRow = ((currentPage - 1) * pageSize) + 1;
+                const lastRow = Math.min(firstRow + currentRow - 1, totalRows);
+                return `Showing ${firstRow} to ${lastRow} of ${totalRows.toLocaleString()} entries`;
+            },
             dataReceiveParams: {
                 last_page: 'lastPage',
                 data: 'data'
@@ -48,8 +58,12 @@
                     companyKey: companySelect.value,
                     page: params.page ?? 1,
                     size: params.size ?? 50,
-                    sorters: params.sorters ?? params.sorter ?? [],
-                    filters: params.filters ?? params.filter ?? []
+                    sorters: Array.isArray(params.sorters)
+                        ? params.sorters
+                        : (params.sorter ? [params.sorter] : []),
+                    filters: Array.isArray(params.filters)
+                        ? params.filters
+                        : (params.filter ? [params.filter] : [])
                 };
 
                 const response = await fetch(url, {
@@ -61,12 +75,12 @@
                 return await response.json();
             },
             columns: [
-                { title: 'Employee ID', field: 'employeeId', headerFilter: 'input' },
-                { title: 'Employee Name', field: 'employeeName', headerFilter: 'input' },
-                { title: 'Home Department', field: 'department', headerFilter: 'input' },
-                { title: 'Document Type', field: 'documentType', headerFilter: 'input' },
-                { title: 'Year', field: 'year', headerFilter: 'input' },
-                { title: 'Termination Date', field: 'terminationDate', formatter: 'datetime', formatterParams: { outputFormat: 'yyyy-MM-dd' }, headerFilter: 'input' }
+                { title: 'Employee ID', field: 'employeeId', headerFilter: 'input', headerSort: true },
+                { title: 'Employee Name', field: 'employeeName', headerFilter: 'input', headerSort: true },
+                { title: 'Home Department', field: 'department', headerFilter: 'input', headerSort: true },
+                { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true },
+                { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true },
+                { title: 'Termination Date', field: 'terminationDate', formatter: 'datetime', formatterParams: { outputFormat: 'yyyy-MM-dd' }, headerFilter: 'input', headerSort: true }
             ]
         });
 
