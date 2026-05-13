@@ -27,7 +27,6 @@ The application is intentionally split into **metadata query in SQL** and **cont
 - EF Core SQL Server provider
 - Azure Blob Storage SDK
 - Microsoft Identity Web (OpenID Connect / Entra ID)
-- Azure Monitor OpenTelemetry exporter
 
 ---
 
@@ -139,16 +138,7 @@ The policy `HREmployeeDocumentsOnly` requires:
 
 If missing, app runs in deny-all mode.
 
-### 4) Telemetry
-
-Set either:
-
-- `ConnectionStrings:ApplicationInsights`, or
-- `APPLICATIONINSIGHTS_CONNECTION_STRING`
-
-The connection string is validated at startup; invalid values disable telemetry.
-
-### 5) Documents page text
+### 4) Documents page text
 
 `DocumentsPage` controls UI title/description/message shown on `/documents`.
 

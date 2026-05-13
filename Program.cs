@@ -1,9 +1,6 @@
-using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
-using Azure.Monitor.OpenTelemetry.AspNetCore;
 using EmployeeDocumentsViewer.Configuration;
-using EmployeeDocumentsViewer.Features;
 using EmployeeDocumentsViewer.Features.Documents;
 using FastEndpoints;
 using FastEndpoints.Swagger;
@@ -12,11 +9,6 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
-using OpenTelemetry.Instrumentation.AspNetCore;
-using OpenTelemetry.Instrumentation.Http;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,109 +57,6 @@ static AuthorizationPolicy BuildDenyAllPolicy()
     return new AuthorizationPolicyBuilder()
         .RequireAssertion(_ => false)
         .Build();
-}
-
-static bool IsValidAppInsightsConnectionString(string? connectionString)
-{
-    if (string.IsNullOrWhiteSpace(connectionString))
-        return false;
-
-    if (!connectionString.Contains("InstrumentationKey=", StringComparison.OrdinalIgnoreCase))
-        return false;
-
-    var parts = connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries);
-
-    var ingestion = parts
-        .FirstOrDefault(p => p.StartsWith("IngestionEndpoint=", StringComparison.OrdinalIgnoreCase));
-
-    if (ingestion is not null)
-    {
-        var value = ingestion.Split('=', 2)[1];
-
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
-            return false;
-
-        if (uri.Scheme != Uri.UriSchemeHttps)
-            return false;
-    }
-
-    return true;
-}
-
-var applicationInsightsConnectionString =
-    builder.Configuration.GetConnectionString("ApplicationInsights")
-    ?? builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
-
-if (IsValidAppInsightsConnectionString(applicationInsightsConnectionString))
-{
-    builder.Services.AddOpenTelemetry()
-        .UseAzureMonitor(options =>
-        {
-            options.ConnectionString = applicationInsightsConnectionString;
-            options.SamplingRatio = builder.Environment.IsDevelopment() ? 1.0F : 0.25F;
-
-            if (!builder.Environment.IsDevelopment())
-            {
-                options.StorageDirectory = @"D:\home\site\otel-storage";
-            }
-        })
-        .ConfigureResource(resource => resource
-            .AddService(
-                serviceName: Telemetry.ServiceName,
-                serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown")
-            .AddAttributes(new Dictionary<string, object>
-            {
-                ["deployment.environment"] = builder.Environment.EnvironmentName
-            }));
-
-    builder.Services.ConfigureOpenTelemetryTracerProvider((_, tracerProviderBuilder) =>
-    {
-        tracerProviderBuilder
-            .AddSource(Telemetry.ActivitySourceName);
-    });
-
-    builder.Services.ConfigureOpenTelemetryMeterProvider((_, meterProviderBuilder) =>
-    {
-        meterProviderBuilder
-            .AddMeter(Telemetry.MeterName);
-    });
-
-    builder.Services.Configure<AspNetCoreTraceInstrumentationOptions>(options =>
-    {
-        options.RecordException = true;
-        options.Filter = httpContext =>
-        {
-            var path = httpContext.Request.Path;
-
-            return !(path.StartsWithSegments("/health")
-                || path.StartsWithSegments("/debug")
-                || path.StartsWithSegments("/favicon.ico"));
-        };
-    });
-
-    builder.Services.Configure<HttpClientTraceInstrumentationOptions>(options =>
-    {
-        options.RecordException = true;
-    });
-
-    builder.Logging.AddOpenTelemetry(options =>
-    {
-        options.IncludeScopes = true;
-        options.IncludeFormattedMessage = true;
-        options.ParseStateValues = true;
-    });
-
-    startupLogger.LogInformation("Application Insights telemetry enabled.");
-}
-else if (!string.IsNullOrWhiteSpace(applicationInsightsConnectionString))
-{
-    startupLogger.LogError(
-        "Application Insights connection string is INVALID. Telemetry is disabled.");
-}
-else
-{
-    startupLogger.LogWarning(
-        "Application Insights connection string not configured. Telemetry is disabled.");
 }
 
 var hrEmployeeDocumentsGroupId =

@@ -1,6 +1,5 @@
 using Azure;
 using Azure.Storage.Blobs;
-using System.Diagnostics;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents.Data;
 using EmployeeDocumentsViewer.Features.Documents.List;
@@ -26,8 +25,6 @@ public sealed class SqlDocumentRepository(
         IReadOnlyList<SortDescriptor> sorters,
         CancellationToken cancellationToken)
     {
-        using var activity = Telemetry.ActivitySource.StartActivity("documents.search", ActivityKind.Internal);
-
         var options = new DbContextOptionsBuilder<DocumentCatalogDbContext>()
             .UseSqlServer(_connectionStringResolver.GetSqlConnectionString(company))
             .Options;
@@ -112,7 +109,6 @@ public sealed class SqlDocumentRepository(
 
     public async Task<BlobDocumentStream?> OpenReadAsync(Company company, string blobName, CancellationToken cancellationToken)
     {
-        using var activity = Telemetry.ActivitySource.StartActivity("documents.open", ActivityKind.Internal);
         var container = CreateDocumentsContainerClient(company);
         var blobClient = container.GetBlobClient(blobName);
 
