@@ -32,16 +32,7 @@ public sealed class SqlDocumentRepository(
         await using var context = new DocumentCatalogDbContext(options);
 
         var baseQuery = context.Documents
-            .AsNoTracking()
-            .Select(x => new DocumentReadRow(
-                BlobName: string.Empty,
-                EmployeeId: x.EmployeeId,
-                EmployeeName: x.EmployeeName,
-                Department: x.HomeDepartment,
-                DocumentType: x.DocumentTypeDisplay,
-                Year: x.Year,
-                TerminationDate: x.TerminationDate,
-                UpdatedUtc: null));
+            .AsNoTracking();
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
         var filtered = ApplyFilters(baseQuery, filters);
@@ -51,12 +42,21 @@ public sealed class SqlDocumentRepository(
         var rows = await sorted
             .Skip((page - 1) * size)
             .Take(size)
+            .Select(x => new DocumentReadRow(
+                BlobName: string.Empty,
+                EmployeeId: x.EmployeeId,
+                EmployeeName: x.EmployeeName,
+                Department: x.HomeDepartment,
+                DocumentType: x.DocumentTypeDisplay,
+                Year: x.Year,
+                TerminationDate: x.TerminationDate,
+                UpdatedUtc: null))
             .ToListAsync(cancellationToken);
 
         return (totalCount, filteredCount, rows);
     }
 
-    private static IQueryable<DocumentReadRow> ApplyFilters(IQueryable<DocumentReadRow> query, IReadOnlyList<FilterDescriptor> filters)
+    private static IQueryable<EmployeeDocumentCatalog> ApplyFilters(IQueryable<EmployeeDocumentCatalog> query, IReadOnlyList<FilterDescriptor> filters)
     {
         foreach (var filter in filters.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
         {
@@ -72,10 +72,10 @@ public sealed class SqlDocumentRepository(
                     break;
                 case "department":
                 case "homedepartment":
-                    query = query.Where(x => EF.Functions.Like(x.Department, term));
+                    query = query.Where(x => EF.Functions.Like(x.HomeDepartment, term));
                     break;
                 case "documenttype":
-                    query = query.Where(x => EF.Functions.Like(x.DocumentType, term));
+                    query = query.Where(x => EF.Functions.Like(x.DocumentTypeDisplay, term));
                     break;
                 case "year" when int.TryParse(value, out var year):
                     query = query.Where(x => x.Year == year);
@@ -86,7 +86,7 @@ public sealed class SqlDocumentRepository(
         return query;
     }
 
-    private static IQueryable<DocumentReadRow> ApplySorting(IQueryable<DocumentReadRow> query, IReadOnlyList<SortDescriptor> sorters)
+    private static IQueryable<EmployeeDocumentCatalog> ApplySorting(IQueryable<EmployeeDocumentCatalog> query, IReadOnlyList<SortDescriptor> sorters)
     {
         var sorter = sorters.FirstOrDefault();
         var desc = string.Equals(sorter?.Dir, "desc", StringComparison.OrdinalIgnoreCase);
@@ -97,10 +97,10 @@ public sealed class SqlDocumentRepository(
             ("employeeid", true) => query.OrderByDescending(x => x.EmployeeId),
             ("employeename", false) => query.OrderBy(x => x.EmployeeName),
             ("employeename", true) => query.OrderByDescending(x => x.EmployeeName),
-            ("department", false) => query.OrderBy(x => x.Department),
-            ("department", true) => query.OrderByDescending(x => x.Department),
-            ("documenttype", false) => query.OrderBy(x => x.DocumentType),
-            ("documenttype", true) => query.OrderByDescending(x => x.DocumentType),
+            ("department", false) => query.OrderBy(x => x.HomeDepartment),
+            ("department", true) => query.OrderByDescending(x => x.HomeDepartment),
+            ("documenttype", false) => query.OrderBy(x => x.DocumentTypeDisplay),
+            ("documenttype", true) => query.OrderByDescending(x => x.DocumentTypeDisplay),
             ("year", false) => query.OrderBy(x => x.Year),
             ("year", true) => query.OrderByDescending(x => x.Year),
             _ => query.OrderBy(x => x.EmployeeName)
