@@ -103,6 +103,8 @@ public sealed class SqlDocumentRepository(
             ("documenttype", true) => query.OrderByDescending(x => x.DocumentTypeDisplay),
             ("year", false) => query.OrderBy(x => x.Year),
             ("year", true) => query.OrderByDescending(x => x.Year),
+            ("terminationdate", false) => query.OrderBy(x => x.TerminationDate),
+            ("terminationdate", true) => query.OrderByDescending(x => x.TerminationDate),
             _ => query.OrderBy(x => x.EmployeeName)
         };
     }
