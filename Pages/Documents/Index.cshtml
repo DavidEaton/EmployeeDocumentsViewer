@@ -68,7 +68,23 @@
                     body: JSON.stringify(payload)
                 });
 
-                return await response.json();
+                const raw = await response.json();
+                const normalized = raw?.response ?? raw;
+                const pageCount = Number(
+                    normalized?.last_page
+                    ?? normalized?.lastPage
+                    ?? normalized?.lastpage
+                    ?? 1
+                );
+                const rows = Array.isArray(normalized?.data)
+                    ? normalized.data
+                    : (Array.isArray(normalized?.items) ? normalized.items : []);
+
+                return {
+                    ...normalized,
+                    last_page: Number.isFinite(pageCount) && pageCount > 0 ? pageCount : 1,
+                    data: rows
+                };
             },
             columns: [
                 { title: 'Employee ID', field: 'employeeId', headerFilter: 'input', headerSort: true },
