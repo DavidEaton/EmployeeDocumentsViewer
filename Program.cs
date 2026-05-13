@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
 using EmployeeDocumentsViewer.Configuration;
@@ -9,31 +10,57 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Logging.ClearProviders();
-builder.Logging.AddSimpleConsole(options =>
+var configuredLogPath = builder.Environment.IsDevelopment()
+    ? builder.Configuration["LogPath"]
+    : Environment.GetEnvironmentVariable("BACKFILL_LOG_PATH");
+
+var requestedLogPath = string.IsNullOrWhiteSpace(configuredLogPath)
+    ? "/logs/log-.txt"
+    : configuredLogPath;
+
+string effectiveLogPath;
+
+try
 {
-    options.SingleLine = true;
-    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff zzz ";
-    options.IncludeScopes = true;
-});
-builder.Logging.AddDebug();
+    EnsureLogDirectoryExists(requestedLogPath);
+    effectiveLogPath = requestedLogPath;
+}
+catch (Exception ex)
+{
+    var fallbackLogPath = "/tmp/employee-documents-viewer/log-.txt";
+    EnsureLogDirectoryExists(fallbackLogPath);
+    effectiveLogPath = fallbackLogPath;
+
+    Console.Error.WriteLine($"[EmployeeDocumentsViewer] Failed to initialize requested log path '{requestedLogPath}'. Falling back to '{fallbackLogPath}'. Error: {ex.Message}");
+}
+
+Console.WriteLine($"[EmployeeDocumentsViewer] Effective log path: {effectiveLogPath}");
+
+Log.Logger = new LoggerConfiguration()
+    .Enrich.FromLogContext()
+    .MinimumLevel.Debug()
+    .WriteTo.Console(
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: effectiveLogPath,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 14,
+        shared: true,
+        flushToDiskInterval: TimeSpan.FromSeconds(1),
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj} {Properties:j}{NewLine}{Exception}")
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+builder.Services.AddSerilog();
 
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
-var startupLogger = LoggerFactory.Create(logging =>
-{
-    logging.ClearProviders();
-    logging.AddSimpleConsole(options =>
-    {
-        options.SingleLine = true;
-        options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff zzz ";
-        options.IncludeScopes = true;
-    });
-    logging.AddDebug();
-}).CreateLogger("Startup");
+var startupLogger = LoggerFactory.Create(logging => logging.AddSerilog(Log.Logger, dispose: false))
+    .CreateLogger("Startup");
 
 static bool HasRequiredAzureAdSettings(IConfiguration configuration)
 {
@@ -57,6 +84,18 @@ static AuthorizationPolicy BuildDenyAllPolicy()
     return new AuthorizationPolicyBuilder()
         .RequireAssertion(_ => false)
         .Build();
+}
+
+static void EnsureLogDirectoryExists(string logPath)
+{
+    var directory = Path.GetDirectoryName(logPath);
+
+    if (string.IsNullOrWhiteSpace(directory))
+    {
+        throw new InvalidOperationException($"Log path '{logPath}' must include a directory.");
+    }
+
+    Directory.CreateDirectory(directory);
 }
 
 var hrEmployeeDocumentsGroupId =
@@ -219,8 +258,7 @@ if (app.Environment.IsDevelopment())
     {
         status = "Healthy",
         authenticationConfigured = hasAzureAdConfiguration,
-        authorizationConfigured = hasValidGroupConfiguration,
-        telemetryConfigured = !string.IsNullOrWhiteSpace(applicationInsightsConnectionString)
+        authorizationConfigured = hasValidGroupConfiguration
     }));
 }
 
