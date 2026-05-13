@@ -34,6 +34,10 @@
             filterMode: 'remote',
             sortMode: 'remote',
             paginationSize: 50,
+            dataReceiveParams: {
+                last_page: 'lastPage',
+                data: 'data'
+            },
             ajaxURL: '/api/documents/list',
             ajaxConfig: 'POST',
             ajaxContentType: 'json',
@@ -44,8 +48,8 @@
                     companyKey: companySelect.value,
                     page: params.page ?? 1,
                     size: params.size ?? 50,
-                    sorters: params.sorters ?? [],
-                    filters: params.filters ?? []
+                    sorters: params.sorters ?? params.sorter ?? [],
+                    filters: params.filters ?? params.filter ?? []
                 };
 
                 const response = await fetch(url, {
