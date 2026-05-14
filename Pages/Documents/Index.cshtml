@@ -19,7 +19,7 @@
     </div>
 </div>
 
-<p class="document-grid-hint mt-2 mb-2" id="document-grid-hint">Tip: Click any row or use the <strong>Open</strong> column to open or download that document's PDF.</p>
+<p class="document-grid-hint mt-2 mb-2" id="document-grid-hint">Tip: Click any row or use the open icon column to open or download that document's PDF.</p>
 <div id="document-grid"></div>
 
 @section Scripts
@@ -38,8 +38,11 @@
         }
 
         #document-grid .open-document-link {
-            font-weight: 600;
-            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: inherit;
+            text-decoration: none;
         }
 
         #document-grid .open-document-missing {
@@ -47,11 +50,44 @@
             font-style: italic;
             white-space: nowrap;
         }
+
+        #document-grid .open-document-icon {
+            display: inline-block;
+            color: currentColor;
+            line-height: 0;
+        }
+
+        #document-grid .open-document-icon svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        #document-grid .open-header-icon svg {
+            width: 18px;
+            height: 18px;
+        }
     </style>
 
     <script>
         const companySelect = document.getElementById('companySelect');
         const openDocumentTooltip = 'Click anywhere on this row to open or download the PDF';
+        const openDocumentGlyph = `
+            <span class="open-document-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M14 4h6v6"></path>
+                    <path d="M10 14L20 4"></path>
+                    <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path>
+                </svg>
+            </span>`;
+        const openHeaderGlyph = openDocumentGlyph.replace(
+            'open-document-icon',
+            'open-document-icon open-header-icon'
+        );
 
         const getBlobName = (rowData) =>
             rowData?.blobName
@@ -113,7 +149,8 @@
                        href="${openUrl}"
                        target="_blank"
                        rel="noopener noreferrer"
-                       title="${openDocumentTooltip}">Open PDF</a>`;
+                       aria-label="Open PDF"
+                       title="${openDocumentTooltip}">${openDocumentGlyph}</a>`;
         };
 
         const makeCellClickHandler = (e, cell) => {
@@ -198,7 +235,6 @@
                     : Array.isArray(normalized?.items)
                         ? normalized.items
                         : [];
-                });
 
                 const pageCount = Number(
                     normalized?.last_page
@@ -237,25 +273,11 @@
             },
 
             columns: [
-                {
-                    title: 'Open',
-                    field: 'blobName',
-                    width: 110,
-                    hozAlign: 'center',
-                    headerSort: false,
-                    headerFilter: false,
-                    formatter: makeOpenColumnFormatter,
-                    cellClick: (e, cell) => {
-                        e.stopPropagation();
-                        const target = e.target;
-                        openDocument(cell.getRow().getData());
-                    }
-                },
-                { title: 'EeId', field: 'employeeId', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
+                { title: 'EeId', field: 'employeeId', headerFilter: 'input', headerSort: true, minWidth: 80, maxWidth: 120, widthShrink: 3, cellClick: makeCellClickHandler },
                 { title: 'Employee Name', field: 'employeeName', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
                 { title: 'Home Department', field: 'department', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
                 { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
-                { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
+                { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true, minWidth: 70, maxWidth: 90, widthShrink: 3, cellClick: makeCellClickHandler },
                 {
                     title: 'Termination Date',
                     field: 'terminationDate',
@@ -275,6 +297,23 @@
                     headerFilter: 'input',
                     headerSort: true,
                     cellClick: makeCellClickHandler
+                },
+                {
+                    title: '',
+                    field: 'blobName',
+                    width: 56,
+                    minWidth: 56,
+                    maxWidth: 64,
+                    hozAlign: 'center',
+                    headerHozAlign: 'center',
+                    headerSort: false,
+                    headerFilter: false,
+                    titleFormatter: () => `<span aria-label="Open PDF" title="Open PDF">${openHeaderGlyph}</span>`,
+                    formatter: makeOpenColumnFormatter,
+                    cellClick: (e, cell) => {
+                        e.stopPropagation();
+                        openDocument(cell.getRow().getData());
+                    }
                 }
             ]
         });
