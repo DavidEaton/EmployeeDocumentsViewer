@@ -41,8 +41,9 @@
                     return 'Showing 0 to 0 of 0 entries';
                 }
 
+                const rowsOnPage = table.getDataCount();
                 const firstRow = ((currentPage - 1) * pageSize) + 1;
-                const lastRow = Math.min(firstRow + currentRow - 1, totalRows);
+                const lastRow = Math.min(firstRow + rowsOnPage - 1, totalRows);
                 return `Showing ${firstRow} to ${lastRow} of ${totalRows.toLocaleString()} entries`;
             },
             ajaxURL: '/api/documents/list',
@@ -89,10 +90,18 @@
                 const rows = Array.isArray(normalized?.data)
                     ? normalized.data
                     : (Array.isArray(normalized?.items) ? normalized.items : []);
+                const filteredCount = Number(
+                    normalized?.filtered_count
+                    ?? normalized?.filteredCount
+                    ?? normalized?.total_count
+                    ?? normalized?.totalCount
+                    ?? rows.length
+                );
 
                 return {
                     ...normalized,
                     last_page: Number.isFinite(pageCount) && pageCount > 0 ? pageCount : 1,
+                    last_row: Number.isFinite(filteredCount) && filteredCount >= 0 ? filteredCount : rows.length,
                     data: rows
                 };
             },
