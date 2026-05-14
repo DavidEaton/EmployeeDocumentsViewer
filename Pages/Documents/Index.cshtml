@@ -29,11 +29,16 @@
     <script>
         const companySelect = document.getElementById('companySelect');
         const getDocumentOpenUrl = (rowData) => {
-            if (!rowData || !rowData.companyKey || !rowData.blobName) {
+            if (!rowData || !rowData.blobName) {
                 return null;
             }
 
-            const company = encodeURIComponent(String(rowData.companyKey));
+            const resolvedCompanyKey = rowData.companyKey || companySelect.value;
+            if (!resolvedCompanyKey) {
+                return null;
+            }
+
+            const company = encodeURIComponent(String(resolvedCompanyKey));
             const blobName = encodeURIComponent(String(rowData.blobName));
             return `/api/documents/open/${company}?blobName=${blobName}`;
         };
@@ -123,7 +128,7 @@
 
                 const openUrl = getDocumentOpenUrl(row.getData());
                 if (openUrl) {
-                    window.open(openUrl, '_blank', 'noopener');
+                    window.location.href = openUrl;
                 }
             },
             rowFormatter: (row) => {
@@ -153,19 +158,19 @@
                     headerSort: true
                 },
                 {
-                    title: '',
+                    title: 'Open',
                     field: 'blobName',
                     headerSort: false,
                     headerFilter: false,
                     hozAlign: 'center',
-                    width: 56,
+                    width: 80,
                     formatter: (cell) => {
                         const openUrl = getDocumentOpenUrl(cell.getRow().getData());
                         if (!openUrl) {
                             return '';
                         }
 
-                        return `<a href="${openUrl}" target="_blank" rel="noopener" title="Open/download PDF in a new tab" aria-label="Open/download PDF in a new tab" style="text-decoration:none;color:inherit;">⤓</a>`;
+                        return `<a href="${openUrl}" target="_blank" rel="noopener" title="Open/download PDF in a new tab" aria-label="Open/download PDF in a new tab" style="text-decoration:none;color:inherit;font-weight:600;">Open ↗</a>`;
                     }
                 }
             ]
