@@ -28,6 +28,16 @@
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script>
         const companySelect = document.getElementById('companySelect');
+        const getDocumentOpenUrl = (rowData) => {
+            if (!rowData || !rowData.companyKey || !rowData.blobName) {
+                return null;
+            }
+
+            const company = encodeURIComponent(String(rowData.companyKey));
+            const blobName = encodeURIComponent(String(rowData.blobName));
+            return `/api/documents/open/${company}?blobName=${blobName}`;
+        };
+
         const table = new Tabulator('#document-grid', {
             layout: 'fitColumns',
             pagination: true,
@@ -105,6 +115,24 @@
                     data: rows
                 };
             },
+            rowClick: (e, row) => {
+                const target = e.target;
+                if (target && target.closest && target.closest('a')) {
+                    return;
+                }
+
+                const openUrl = getDocumentOpenUrl(row.getData());
+                if (openUrl) {
+                    window.open(openUrl, '_blank', 'noopener');
+                }
+            },
+            rowFormatter: (row) => {
+                const rowElement = row.getElement();
+                rowElement.style.cursor = getDocumentOpenUrl(row.getData()) ? 'pointer' : '';
+                rowElement.title = getDocumentOpenUrl(row.getData())
+                    ? 'Open/download PDF in a new tab'
+                    : '';
+            },
             columns: [
                 { title: 'Employee ID', field: 'employeeId', headerFilter: 'input', headerSort: true },
                 { title: 'Employee Name', field: 'employeeName', headerFilter: 'input', headerSort: true },
@@ -123,6 +151,22 @@
                     },
                     headerFilter: 'input',
                     headerSort: true
+                },
+                {
+                    title: '',
+                    field: 'blobName',
+                    headerSort: false,
+                    headerFilter: false,
+                    hozAlign: 'center',
+                    width: 56,
+                    formatter: (cell) => {
+                        const openUrl = getDocumentOpenUrl(cell.getRow().getData());
+                        if (!openUrl) {
+                            return '';
+                        }
+
+                        return `<a href="${openUrl}" target="_blank" rel="noopener" title="Open/download PDF in a new tab" aria-label="Open/download PDF in a new tab" style="text-decoration:none;color:inherit;">⤓</a>`;
+                    }
                 }
             ]
         });
