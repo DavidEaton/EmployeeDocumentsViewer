@@ -27,23 +27,103 @@
     <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
+
+    <style>
+        #document-grid .document-row-openable {
+            cursor: pointer;
+        }
+
+        #document-grid .document-row-openable:hover .tabulator-cell {
+            background-color: rgba(0, 0, 0, 0.04);
+        }
+
+        #document-grid .open-document-link {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        #document-grid .open-document-missing {
+            color: #777;
+            font-style: italic;
+            white-space: nowrap;
+        }
+    </style>
+
     <script>
         const companySelect = document.getElementById('companySelect');
-        const getBlobName = (rowData) => rowData?.blobName ?? rowData?.BlobName ?? null;
+        const openDocumentTooltip = 'Click anywhere on this row to open or download the PDF';
+
+        const getBlobName = (rowData) =>
+            rowData?.blobName
+            ?? rowData?.BlobName
+            ?? rowData?.blob
+            ?? rowData?.Blob
+            ?? null;
+
+        const getCompanyKey = (rowData) =>
+            rowData?.companyKey
+            ?? rowData?.CompanyKey
+            ?? companySelect?.value
+            ?? null;
+
         const getDocumentOpenUrl = (rowData) => {
-            const blobNameValue = getBlobName(rowData);
-            if (!rowData || !blobNameValue) {
+            const companyKey = getCompanyKey(rowData);
+            const blobName = getBlobName(rowData);
+
+            if (!companyKey || !blobName) {
                 return null;
             }
 
-            const resolvedCompanyKey = rowData.companyKey || rowData.CompanyKey || companySelect.value;
-            if (!resolvedCompanyKey) {
-                return null;
+            return `/api/documents/open/${encodeURIComponent(String(companyKey))}?blobName=${encodeURIComponent(String(blobName))}`;
+        };
+
+        const logRowDiagnostic = (rowData, reason) => {
+            console.warn(`Document row is not openable: ${reason}`, {
+                rowData,
+                companyKey: getCompanyKey(rowData),
+                blobName: getBlobName(rowData),
+                availableFields: rowData ? Object.keys(rowData) : []
+            });
+        };
+
+        const openDocument = (rowData) => {
+        const openUrl = getDocumentOpenUrl(rowData);
+
+        if (!openUrl) {
+            logRowDiagnostic(rowData, 'missing companyKey or blobName');
+            return;
+        }
+
+        const openedWindow = window.open(openUrl, '_blank', 'noopener,noreferrer');
+
+        if (openedWindow) {
+            openedWindow.opener = null;
+        }
+        };
+
+        const makeOpenColumnFormatter = (cell) => {
+            const rowData = cell.getRow().getData();
+            const openUrl = getDocumentOpenUrl(rowData);
+
+            if (!openUrl) {
+                return `<span class="open-document-missing" title="This row does not include blobName/companyKey data">No PDF</span>`;
             }
 
-            const company = encodeURIComponent(String(resolvedCompanyKey));
-            const blobName = encodeURIComponent(String(blobNameValue));
-            return `/api/documents/open/${company}?blobName=${blobName}`;
+            return `<a class="open-document-link"
+                       href="${openUrl}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       title="${openDocumentTooltip}">Open PDF</a>`;
+        };
+
+        const makeCellClickHandler = (e, cell) => {
+            const target = e.target;
+
+            if (target?.closest?.('a, button, input, select, textarea')) {
+                return;
+            }
+
+            openDocument(cell.getRow().getData());
         };
 
         const table = new Tabulator('#document-grid', {
@@ -54,6 +134,7 @@
             sortMode: 'remote',
             paginationSize: 25,
             paginationSizeSelector: [10, 25, 50, 100],
+
             paginationCounter: function (pageSize, currentRow, currentPage, totalRows, totalPages) {
                 if (totalRows === 0) {
                     return 'Showing 0 to 0 of 0 entries';
@@ -62,32 +143,40 @@
                 const rowsOnPage = table.getDataCount();
                 const firstRow = ((currentPage - 1) * pageSize) + 1;
                 const lastRow = Math.min(firstRow + rowsOnPage - 1, totalRows);
+
                 return `Showing ${firstRow} to ${lastRow} of ${totalRows.toLocaleString()} entries`;
             },
+
             ajaxURL: '/api/documents/list',
             ajaxConfig: 'POST',
             ajaxContentType: 'json',
-            ajaxRequestFunc: async (url, config, params) => {
-                if (!companySelect.value) return { last_page: 1, data: [] };
 
-                const tabulatorFilters = table.getHeaderFilters();
-                const tabulatorSorters = table.getSorters();
+            ajaxRequestFunc: async (url, config, params) => {
+                if (!companySelect.value) {
+                    return {
+                        last_page: 1,
+                        last_row: 0,
+                        data: []
+                    };
+                }
 
                 const payload = {
                     companyKey: companySelect.value,
                     page: Number.isFinite(params?.page) ? params.page : 1,
                     size: Number.isFinite(params?.size) ? params.size : table.getPageSize(),
-                    sorters: tabulatorSorters
-                        .filter(s => s && typeof s.field === 'string')
-                        .map(s => ({
-                            field: s.field,
-                            dir: s.dir === 'desc' ? 'desc' : 'asc'
+
+                    sorters: table.getSorters()
+                        .filter(sorter => sorter && typeof sorter.field === 'string')
+                        .map(sorter => ({
+                            field: sorter.field,
+                            dir: sorter.dir === 'desc' ? 'desc' : 'asc'
                         })),
-                    filters: tabulatorFilters
-                        .filter(f => f && typeof f.field === 'string')
-                        .map(f => ({
-                            field: f.field,
-                            value: f.value == null ? null : String(f.value)
+
+                    filters: table.getHeaderFilters()
+                        .filter(filter => filter && typeof filter.field === 'string')
+                        .map(filter => ({
+                            field: filter.field,
+                            value: filter.value == null ? null : String(filter.value)
                         }))
                 };
 
@@ -97,17 +186,27 @@
                     body: JSON.stringify(payload)
                 });
 
+                if (!response.ok) {
+                    throw new Error(`Document list request failed with HTTP ${response.status}.`);
+                }
+
                 const raw = await response.json();
                 const normalized = raw?.response ?? raw;
+
+                const rows = Array.isArray(normalized?.data)
+                    ? normalized.data
+                    : Array.isArray(normalized?.items)
+                        ? normalized.items
+                        : [];
+                });
+
                 const pageCount = Number(
                     normalized?.last_page
                     ?? normalized?.lastPage
                     ?? normalized?.lastpage
                     ?? 1
                 );
-                const rows = Array.isArray(normalized?.data)
-                    ? normalized.data
-                    : (Array.isArray(normalized?.items) ? normalized.items : []);
+
                 const filteredCount = Number(
                     normalized?.filtered_count
                     ?? normalized?.filteredCount
@@ -123,68 +222,74 @@
                     data: rows
                 };
             },
-            rowClick: (e, row) => {
-                const target = e.target;
-                if (target && target.closest && target.closest('a')) {
-                    return;
-                }
 
-                const openUrl = getDocumentOpenUrl(row.getData());
-                if (openUrl) {
-                    window.open(openUrl, '_blank', 'noopener');
+            rowFormatter: (row) => {
+                const rowData = row.getData();
+                const openUrl = getDocumentOpenUrl(rowData);
+                const rowElement = row.getElement();
+
+                rowElement.classList.toggle('document-row-openable', Boolean(openUrl));
+                rowElement.title = openUrl ? openDocumentTooltip : 'This row is missing blobName/companyKey data.';
+
+                for (const cell of row.getCells()) {
+                    cell.getElement().title = rowElement.title;
                 }
             },
-            rowFormatter: (row) => {
-                const rowElement = row.getElement();
-                rowElement.style.cursor = getDocumentOpenUrl(row.getData()) ? 'pointer' : '';
-                rowElement.title = getDocumentOpenUrl(row.getData())
-                    ? 'Click anywhere on this row to open or download the PDF'
-                    : '';
-            },
+
             columns: [
-                { title: 'Employee ID', field: 'employeeId', headerFilter: 'input', headerSort: true },
-                { title: 'Employee Name', field: 'employeeName', headerFilter: 'input', headerSort: true },
-                { title: 'Home Department', field: 'department', headerFilter: 'input', headerSort: true },
-                { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true },
-                { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true },
+                {
+                    title: 'Open',
+                    field: 'blobName',
+                    width: 110,
+                    hozAlign: 'center',
+                    headerSort: false,
+                    headerFilter: false,
+                    formatter: makeOpenColumnFormatter,
+                    cellClick: (e, cell) => {
+                        e.stopPropagation();
+                        const target = e.target;
+                        openDocument(cell.getRow().getData());
+                    }
+                },
+                { title: 'EeId', field: 'employeeId', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
+                { title: 'Employee Name', field: 'employeeName', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
+                { title: 'Home Department', field: 'department', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
+                { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
+                { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
                 {
                     title: 'Termination Date',
                     field: 'terminationDate',
                     formatter: (cell) => {
                         const value = cell.getValue();
-                        if (!value) return '';
 
-                        const parsed = luxon.DateTime.fromISO(String(value));
-                        return parsed.isValid ? parsed.toFormat('yyyy-MM-dd') : String(value);
-                    },
-                    headerFilter: 'input',
-                    headerSort: true
-                },
-                {
-                    title: 'Open',
-                    field: 'blobName',
-                    headerSort: false,
-                    headerFilter: false,
-                    hozAlign: 'center',
-                    width: 95,
-                    formatter: (cell) => {
-                        const openUrl = getDocumentOpenUrl(cell.getRow().getData());
-                        if (!openUrl) {
+                        if (!value) {
                             return '';
                         }
-                        return '<span class="open-document-trigger" aria-hidden="true">📄 Open</span>';
+
+                        const parsed = luxon.DateTime.fromISO(String(value));
+
+                        return parsed.isValid
+                            ? parsed.toFormat('yyyy-MM-dd')
+                            : String(value);
                     },
-                    cellClick: (e, cell) => {
-                        e.stopPropagation();
-                        const openUrl = getDocumentOpenUrl(cell.getRow().getData());
-                        if (openUrl) {
-                            window.open(openUrl, '_blank', 'noopener');
-                        }
-                    }
+                    headerFilter: 'input',
+                    headerSort: true,
+                    cellClick: makeCellClickHandler
                 }
             ]
         });
 
-        companySelect.addEventListener('change', () => table.setData());
+        table.on('rowClick', (e, row) => {
+            const target = e.target;
+            if (target?.closest?.('a, button, input, select, textarea')) {
+                return;
+            }
+
+            openDocument(row.getData());
+        });
+
+        companySelect.addEventListener('change', () => {
+            table.setData();
+        });
     </script>
 }

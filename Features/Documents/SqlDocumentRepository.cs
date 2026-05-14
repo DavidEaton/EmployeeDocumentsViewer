@@ -43,14 +43,14 @@ public sealed class SqlDocumentRepository(
             .Skip((page - 1) * size)
             .Take(size)
             .Select(x => new DocumentReadRow(
-                BlobName: string.Empty,
+                BlobName: x.BlobName,
                 EmployeeId: x.EmployeeId,
                 EmployeeName: x.EmployeeName,
                 Department: x.HomeDepartment,
                 DocumentType: x.DocumentTypeDisplay,
                 Year: x.Year,
                 TerminationDate: x.TerminationDate,
-                UpdatedUtc: null))
+                UpdatedUtc: x.UpdatedUtc))
             .ToListAsync(cancellationToken);
 
         return (totalCount, filteredCount, rows);
