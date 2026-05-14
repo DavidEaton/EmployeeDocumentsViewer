@@ -29,18 +29,20 @@
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
     <script>
         const companySelect = document.getElementById('companySelect');
+        const getBlobName = (rowData) => rowData?.blobName ?? rowData?.BlobName ?? null;
         const getDocumentOpenUrl = (rowData) => {
-            if (!rowData || !rowData.blobName) {
+            const blobNameValue = getBlobName(rowData);
+            if (!rowData || !blobNameValue) {
                 return null;
             }
 
-            const resolvedCompanyKey = rowData.companyKey || companySelect.value;
+            const resolvedCompanyKey = rowData.companyKey || rowData.CompanyKey || companySelect.value;
             if (!resolvedCompanyKey) {
                 return null;
             }
 
             const company = encodeURIComponent(String(resolvedCompanyKey));
-            const blobName = encodeURIComponent(String(rowData.blobName));
+            const blobName = encodeURIComponent(String(blobNameValue));
             return `/api/documents/open/${company}?blobName=${blobName}`;
         };
 
@@ -170,8 +172,14 @@
                         if (!openUrl) {
                             return '';
                         }
-
-                        return `<a href="${openUrl}" target="_blank" rel="noopener" title="Open/download PDF" aria-label="Open or download PDF" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;color:#0d6efd;font-weight:600;"><span aria-hidden="true">📄</span><span>Open</span></a>`;
+                        return '<span class="open-document-trigger" aria-hidden="true">📄 Open</span>';
+                    },
+                    cellClick: (e, cell) => {
+                        e.stopPropagation();
+                        const openUrl = getDocumentOpenUrl(cell.getRow().getData());
+                        if (openUrl) {
+                            window.open(openUrl, '_blank', 'noopener');
+                        }
                     }
                 }
             ]
