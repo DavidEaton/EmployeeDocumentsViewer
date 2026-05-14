@@ -34,7 +34,7 @@
         }
 
         #document-grid .document-row-openable:hover .tabulator-cell {
-            background-color: rgba(0, 0, 0, 0.04);
+            background-color: var(--app-grid-row-hover, rgba(0, 0, 0, 0.04));
         }
 
         #document-grid .open-document-link {
@@ -279,19 +279,19 @@
                 { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
                 { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true, minWidth: 70, maxWidth: 90, widthShrink: 3, cellClick: makeCellClickHandler },
                 {
-                    title: 'Termination Date',
+                    title: 'Status',
                     field: 'terminationDate',
                     formatter: (cell) => {
                         const value = cell.getValue();
 
                         if (!value) {
-                            return '';
+                            return 'Active';
                         }
 
                         const parsed = luxon.DateTime.fromISO(String(value));
 
                         return parsed.isValid
-                            ? parsed.toFormat('yyyy-MM-dd')
+                            ? parsed.toLocaleString(luxon.DateTime.DATE_SHORT)
                             : String(value);
                     },
                     headerFilter: 'input',
