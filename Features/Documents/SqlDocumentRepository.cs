@@ -32,6 +32,22 @@ public sealed class SqlDocumentRepository(
         await using var context = new DocumentCatalogDbContext(options);
 
         var baseQuery = context.Documents
+            .FromSqlRaw(@"""
+                SELECT
+                    EmployeeId,
+                    EmployeeName,
+                    HomeDepartment,
+                    BlobName,
+                    UpdatedUtc,
+                    IsDeleted,
+                    DocumentTypeDisplay,
+                    [Year],
+                    COALESCE(
+                        TRY_CONVERT(datetime2, TerminationDate),
+                        TRY_CONVERT(datetime2, CONVERT(varchar(8), TerminationDate), 112)
+                    ) AS TerminationDate
+                FROM HR.EmployeeDocumentsCatalog
+                """)
             .AsNoTracking();
 
         var totalCount = await baseQuery.CountAsync(cancellationToken);
