@@ -25,6 +25,7 @@
 @section Scripts
 {
     <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/6.3.1/css/tabulator_site_dark.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
 
@@ -151,6 +152,18 @@
                        rel="noopener noreferrer"
                        aria-label="Open PDF"
                        title="${openDocumentTooltip}">${openDocumentGlyph}</a>`;
+        };
+
+
+        const applyTabulatorTheme = () => {
+            const isDarkTheme = document.body.classList.contains('theme-dark');
+            const tabulatorElement = document.querySelector('#document-grid .tabulator');
+
+            if (!tabulatorElement) {
+                return;
+            }
+
+            tabulatorElement.classList.toggle('tabulator_site_dark', isDarkTheme);
         };
 
         const makeCellClickHandler = (e, cell) => {
@@ -318,6 +331,13 @@
                 }
             ]
         });
+
+        table.on('tableBuilt', () => {
+            applyTabulatorTheme();
+        });
+
+        document.addEventListener('app:themechanged', applyTabulatorTheme);
+        applyTabulatorTheme();
 
         table.on('rowClick', (e, row) => {
             const target = e.target;
