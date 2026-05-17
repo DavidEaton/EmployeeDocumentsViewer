@@ -25,7 +25,7 @@
 @section Scripts
 {
     <link href="https://unpkg.com/tabulator-tables@6.3.0/dist/css/tabulator.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/6.3.1/css/tabulator_site_dark.css" rel="stylesheet">
+    <link id="tabulator-dark-theme" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/6.3.1/css/tabulator_site_dark.css" rel="stylesheet" disabled>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
     <script src="https://unpkg.com/tabulator-tables@6.3.0/dist/js/tabulator.min.js"></script>
 
@@ -158,6 +158,11 @@
         const applyTabulatorTheme = () => {
             const isDarkTheme = document.body.classList.contains('theme-dark');
             const tabulatorElement = document.querySelector('#document-grid .tabulator');
+            const tabulatorDarkStylesheet = document.getElementById('tabulator-dark-theme');
+
+            if (tabulatorDarkStylesheet) {
+                tabulatorDarkStylesheet.disabled = !isDarkTheme;
+            }
 
             if (!tabulatorElement) {
                 return;
