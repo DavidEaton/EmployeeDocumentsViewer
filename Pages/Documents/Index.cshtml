@@ -196,6 +196,57 @@
             openDocument(cell.getRow().getData());
         };
 
+        let gridViewportAnchor = null;
+        let shouldRestoreGridViewport = false;
+
+        const captureGridViewportAnchor = () => {
+            const gridElement = document.getElementById('document-grid');
+
+            if (!gridElement) {
+                gridViewportAnchor = null;
+                return;
+            }
+
+            gridViewportAnchor = {
+                gridTop: gridElement.getBoundingClientRect().top,
+                scrollY: window.scrollY
+            };
+        };
+
+        const restoreGridViewportAnchor = () => {
+            if (!shouldRestoreGridViewport || !gridViewportAnchor) {
+                return;
+            }
+
+            const gridElement = document.getElementById('document-grid');
+
+            if (!gridElement) {
+                gridViewportAnchor = null;
+                return;
+            }
+
+            const currentGridTop = gridElement.getBoundingClientRect().top;
+            const scrollAdjustment = currentGridTop - gridViewportAnchor.gridTop;
+
+            if (Math.abs(scrollAdjustment) > 1) {
+                window.scrollTo({
+                    top: gridViewportAnchor.scrollY + scrollAdjustment,
+                    behavior: 'auto'
+                });
+            }
+
+            shouldRestoreGridViewport = false;
+            gridViewportAnchor = null;
+        };
+
+        const scheduleGridViewportRestore = () => {
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => {
+                    restoreGridViewportAnchor();
+                });
+            });
+        };
+
         const table = new Tabulator('#document-grid', {
             layout: 'fitColumns',
             pagination: true,
@@ -356,6 +407,8 @@
             applyTabulatorTheme();
         });
 
+        table.on('pageLoaded', scheduleGridViewportRestore);
+
         document.addEventListener('app:themechanged', applyTabulatorTheme);
         applyTabulatorTheme();
 
@@ -371,5 +424,40 @@
         companySelect.addEventListener('change', () => {
             table.setData();
         });
+
+        document.getElementById('document-grid')?.addEventListener('pointerdown', (event) => {
+            const pagerControl = event.target?.closest?.('.tabulator-page, .tabulator-page-size');
+
+            if (!pagerControl) {
+                return;
+            }
+
+            captureGridViewportAnchor();
+            shouldRestoreGridViewport = true;
+        }, true);
+
+        document.getElementById('document-grid')?.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            const pagerControl = event.target?.closest?.('.tabulator-page, .tabulator-page-size');
+
+            if (!pagerControl) {
+                return;
+            }
+
+            captureGridViewportAnchor();
+            shouldRestoreGridViewport = true;
+        }, true);
+
+        document.getElementById('document-grid')?.addEventListener('click', (event) => {
+            const pagerAnchor = event.target?.closest?.('.tabulator-page[href="#"], .tabulator-page-size[href="#"]');
+            if (!pagerAnchor) {
+                return;
+            }
+
+            event.preventDefault();
+        }, true);
     </script>
 }
