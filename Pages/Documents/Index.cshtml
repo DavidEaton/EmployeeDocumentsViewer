@@ -181,6 +181,47 @@
             openDocument(cell.getRow().getData());
         };
 
+        let gridViewportAnchor = null;
+
+        const captureGridViewportAnchor = () => {
+            const gridElement = document.getElementById('document-grid');
+
+            if (!gridElement) {
+                gridViewportAnchor = null;
+                return;
+            }
+
+            gridViewportAnchor = {
+                gridTop: gridElement.getBoundingClientRect().top,
+                scrollY: window.scrollY
+            };
+        };
+
+        const restoreGridViewportAnchor = () => {
+            if (!gridViewportAnchor) {
+                return;
+            }
+
+            const gridElement = document.getElementById('document-grid');
+
+            if (!gridElement) {
+                gridViewportAnchor = null;
+                return;
+            }
+
+            const currentGridTop = gridElement.getBoundingClientRect().top;
+            const scrollAdjustment = currentGridTop - gridViewportAnchor.gridTop;
+
+            if (Math.abs(scrollAdjustment) > 1) {
+                window.scrollTo({
+                    top: gridViewportAnchor.scrollY + scrollAdjustment,
+                    behavior: 'auto'
+                });
+            }
+
+            gridViewportAnchor = null;
+        };
+
         const table = new Tabulator('#document-grid', {
             layout: 'fitColumns',
             pagination: true,
@@ -341,6 +382,8 @@
             applyTabulatorTheme();
         });
 
+        table.on('pageLoaded', restoreGridViewportAnchor);
+
         document.addEventListener('app:themechanged', applyTabulatorTheme);
         applyTabulatorTheme();
 
@@ -356,5 +399,15 @@
         companySelect.addEventListener('change', () => {
             table.setData();
         });
+
+        document.getElementById('document-grid')?.addEventListener('click', (event) => {
+            const pagerControl = event.target?.closest?.('.tabulator-page, .tabulator-page-size');
+
+            if (!pagerControl) {
+                return;
+            }
+
+            captureGridViewportAnchor();
+        }, true);
     </script>
 }
