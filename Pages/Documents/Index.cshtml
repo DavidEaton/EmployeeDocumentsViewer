@@ -72,6 +72,21 @@
             width: 18px;
             height: 18px;
         }
+
+        body.theme-dark #document-grid .tabulator,
+        body.theme-dark #document-grid .tabulator .tabulator-header,
+        body.theme-dark #document-grid .tabulator .tabulator-header .tabulator-col,
+        body.theme-dark #document-grid .tabulator .tabulator-tableholder,
+        body.theme-dark #document-grid .tabulator .tabulator-footer,
+        body.theme-dark #document-grid .tabulator .tabulator-row,
+        body.theme-dark #document-grid .tabulator .tabulator-row .tabulator-cell {
+            border-color: var(--app-border, #3a404b) !important;
+        }
+
+        body.theme-dark #document-grid .tabulator {
+            border: 1px solid var(--app-border, #3a404b) !important;
+            box-shadow: none !important;
+        }
     </style>
 
     <script>
