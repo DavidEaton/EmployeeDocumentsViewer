@@ -15,7 +15,10 @@
         document.body.classList.toggle("theme-light", !isDarkTheme);
 
         if (toggleIcon) {
-            toggleIcon.textContent = isDarkTheme ? "🌙" : "☀️";
+            const nextIcon = isDarkTheme ? toggleButton?.dataset.darkIcon : toggleButton?.dataset.lightIcon;
+            if (nextIcon) {
+                toggleIcon.setAttribute("src", nextIcon);
+            }
         }
 
         if (toggleButton) {
