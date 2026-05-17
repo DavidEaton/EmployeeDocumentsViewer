@@ -25,6 +25,7 @@
         }
 
         localStorage.setItem(THEME_STORAGE_KEY, theme);
+        document.dispatchEvent(new CustomEvent("app:themechanged", { detail: { theme, isDarkTheme } }));
     };
 
     const getInitialTheme = () => {
