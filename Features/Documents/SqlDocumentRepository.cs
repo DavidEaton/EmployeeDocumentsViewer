@@ -48,7 +48,7 @@ public sealed class SqlDocumentRepository(
                 EmployeeName: x.EmployeeName,
                 Department: x.HomeDepartment,
                 DocumentType: x.DocumentTypeDisplay,
-                Year: x.Year,
+                Year: x.UpdatedUtc.Year,
                 TerminationDate: x.TerminationDate,
                 UpdatedUtc: x.UpdatedUtc))
             .ToListAsync(cancellationToken);
@@ -78,7 +78,7 @@ public sealed class SqlDocumentRepository(
                     query = query.Where(x => EF.Functions.Like(x.DocumentTypeDisplay, term));
                     break;
                 case "year" when int.TryParse(value, out var year):
-                    query = query.Where(x => x.Year == year);
+                    query = query.Where(x => x.UpdatedUtc.Year == year);
                     break;
             }
         }
@@ -101,8 +101,8 @@ public sealed class SqlDocumentRepository(
             ("department", true) => query.OrderByDescending(x => x.HomeDepartment),
             ("documenttype", false) => query.OrderBy(x => x.DocumentTypeDisplay),
             ("documenttype", true) => query.OrderByDescending(x => x.DocumentTypeDisplay),
-            ("year", false) => query.OrderBy(x => x.Year),
-            ("year", true) => query.OrderByDescending(x => x.Year),
+            ("year", false) => query.OrderBy(x => x.UpdatedUtc.Year),
+            ("year", true) => query.OrderByDescending(x => x.UpdatedUtc.Year),
             ("terminationdate", false) => query.OrderBy(x => x.TerminationDate),
             ("terminationdate", true) => query.OrderByDescending(x => x.TerminationDate),
             _ => query.OrderBy(x => x.EmployeeName)
