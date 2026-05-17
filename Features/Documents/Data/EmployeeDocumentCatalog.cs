@@ -10,5 +10,4 @@ public sealed class EmployeeDocumentCatalog
     public DateTime UpdatedUtc { get; init; }
     public bool IsDeleted { get; init; }
     public string DocumentTypeDisplay { get; init; } = string.Empty;
-    public int Year { get; init; }
 }
