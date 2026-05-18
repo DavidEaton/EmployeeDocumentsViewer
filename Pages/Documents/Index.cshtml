@@ -462,7 +462,10 @@
                         continue;
                     }
 
-                    table.setColumnWidth(columnSetting.field, columnSetting.width);
+                    const column = table.getColumn(columnSetting.field);
+                    if (column) {
+                        column.setWidth(columnSetting.width);
+                    }
                 }
             }
 
