@@ -14,12 +14,12 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var configuredLogPath = builder.Environment.IsDevelopment()
-    ? builder.Configuration["LogPath"]
-    : Environment.GetEnvironmentVariable("BACKFILL_LOG_PATH");
+var configuredLogPath =
+    Environment.GetEnvironmentVariable("LOG_PATH")
+    ?? builder.Configuration["LogPath"];
 
 var requestedLogPath = string.IsNullOrWhiteSpace(configuredLogPath)
-    ? "/logs/log-.txt"
+    ? "/home/LogFiles/Application/employee-documents-viewer/log-.txt"
     : configuredLogPath;
 
 string effectiveLogPath;
