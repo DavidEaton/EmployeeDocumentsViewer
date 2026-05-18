@@ -184,9 +184,15 @@
         let gridViewportAnchor = null;
         let shouldRestoreGridViewport = false;
         const gridSettingsStorageKey = 'employee-documents-grid-settings-v1';
+        let isTableBuilt = false;
+        let isRestoringGridSettings = false;
         let restoredInitialGridSettings = false;
 
         const saveGridSettings = () => {
+            if (!isTableBuilt || isRestoringGridSettings) {
+                return;
+            }
+
             const sorters = table.getSorters()
                 .filter(sorter => sorter && typeof sorter.field === 'string')
                 .map(sorter => ({
@@ -233,6 +239,27 @@
                 return null;
             }
         };
+
+        const persistedGridSettings = getGridSettings();
+        const initialPaginationSize = Number.isFinite(persistedGridSettings?.pageSize) && persistedGridSettings.pageSize > 0
+            ? persistedGridSettings.pageSize
+            : 25;
+        const initialSort = Array.isArray(persistedGridSettings?.sorters)
+            ? persistedGridSettings.sorters
+                .filter(sorter => sorter && typeof sorter.field === 'string')
+                .map(sorter => ({
+                    field: sorter.field,
+                    dir: sorter.dir === 'desc' ? 'desc' : 'asc'
+                }))
+            : [];
+        const initialHeaderFilter = Array.isArray(persistedGridSettings?.filters)
+            ? persistedGridSettings.filters
+                .filter(filter => filter && typeof filter.field === 'string')
+                .map(filter => ({
+                    field: filter.field,
+                    value: filter.value == null ? '' : String(filter.value)
+                }))
+            : [];
 
         const captureGridViewportAnchor = () => {
             const gridElement = document.getElementById('document-grid');
@@ -288,8 +315,10 @@
             paginationMode: 'remote',
             filterMode: 'remote',
             sortMode: 'remote',
-            paginationSize: 25,
+            paginationSize: initialPaginationSize,
             paginationSizeSelector: [10, 25, 50, 100],
+            initialSort,
+            initialHeaderFilter,
 
             paginationCounter: function (pageSize, currentRow, currentPage, totalRows, totalPages) {
                 if (totalRows === 0) {
@@ -440,21 +469,20 @@
 
         table.on('tableBuilt', () => {
             applyTabulatorTheme();
+            isTableBuilt = true;
 
             if (restoredInitialGridSettings) {
                 return;
             }
 
             restoredInitialGridSettings = true;
-            const settings = getGridSettings();
+            const settings = persistedGridSettings;
 
             if (!settings) {
                 return;
             }
 
-            if (Number.isFinite(settings.pageSize) && settings.pageSize > 0) {
-                table.setPageSize(settings.pageSize);
-            }
+            isRestoringGridSettings = true;
 
             if (Array.isArray(settings.columns) && settings.columns.length > 0) {
                 for (const columnSetting of settings.columns) {
@@ -469,25 +497,16 @@
                 }
             }
 
-            if (Array.isArray(settings.sorters)) {
-                table.setSort(settings.sorters);
-            }
-
-            if (Array.isArray(settings.filters)) {
-                const headerFilters = settings.filters
-                    .filter(filter => filter && typeof filter.field === 'string')
-                    .map(filter => ({
-                        field: filter.field,
-                        value: filter.value == null ? '' : String(filter.value)
-                    }));
-
-                for (const headerFilter of headerFilters) {
-                    table.setHeaderFilterValue(headerFilter.field, headerFilter.value);
-                }
-            }
-
             if (Number.isFinite(settings.page) && settings.page > 0) {
-                table.setPage(settings.page);
+                table.setPage(settings.page)
+                    .catch(() => {
+                        // Ignore invalid/out-of-range saved pages.
+                    })
+                    .finally(() => {
+                        isRestoringGridSettings = false;
+                    });
+            } else {
+                isRestoringGridSettings = false;
             }
 
             if (Number.isFinite(settings.scrollY) && settings.scrollY >= 0) {
@@ -521,6 +540,9 @@
         table.on('dataSorted', saveGridSettings);
         table.on('pageLoaded', saveGridSettings);
         window.addEventListener('scroll', () => {
+            if (!isTableBuilt || isRestoringGridSettings) {
+                return;
+            }
             saveGridSettings();
         }, { passive: true });
 
