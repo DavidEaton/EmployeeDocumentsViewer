@@ -1,10 +1,6 @@
-using Azure;
-using Azure.Storage.Blobs;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents.Data;
 using EmployeeDocumentsViewer.Features.Documents.List;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace EmployeeDocumentsViewer.Features.Documents;
 

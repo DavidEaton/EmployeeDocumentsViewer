@@ -1,6 +1,3 @@
-using FastEndpoints;
-using Microsoft.Extensions.Logging;
-
 namespace EmployeeDocumentsViewer.Features.Documents.List;
 
 public sealed class Endpoint(IDocumentRepository repository, ILogger<Endpoint> logger)

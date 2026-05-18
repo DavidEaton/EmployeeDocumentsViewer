@@ -1,5 +1,3 @@
-using FastEndpoints;
-
 namespace EmployeeDocumentsViewer.Features.Documents.Open;
 
 public sealed class Endpoint(IDocumentRepository repository)

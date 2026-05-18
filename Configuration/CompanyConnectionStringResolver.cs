@@ -1,5 +1,4 @@
 using EmployeeDocumentsViewer.Features;
-using Microsoft.Extensions.Options;
 
 namespace EmployeeDocumentsViewer.Configuration;
 

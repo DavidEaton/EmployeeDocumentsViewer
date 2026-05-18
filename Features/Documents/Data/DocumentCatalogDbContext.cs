@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace EmployeeDocumentsViewer.Features.Documents.Data;
 
 public sealed class DocumentCatalogDbContext(DbContextOptions<DocumentCatalogDbContext> options)

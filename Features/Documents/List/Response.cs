@@ -1,7 +1,5 @@
 namespace EmployeeDocumentsViewer.Features.Documents.List;
 
-using System.Text.Json.Serialization;
-
 public sealed class Response
 {
     [JsonPropertyName("last_page")]

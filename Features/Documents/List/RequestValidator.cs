@@ -1,6 +1,3 @@
-using FastEndpoints;
-using FluentValidation;
-
 namespace EmployeeDocumentsViewer.Features.Documents.List;
 
 public sealed class RequestValidator : Validator<Request>
