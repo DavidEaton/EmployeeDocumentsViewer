@@ -301,6 +301,37 @@
             gridViewportAnchor = null;
         };
 
+        const applyColumnWidths = (settings) => {
+            if (!Array.isArray(settings?.columns) || settings.columns.length === 0) {
+                return;
+            }
+
+            for (const columnSetting of settings.columns) {
+                if (!columnSetting || typeof columnSetting.field !== 'string' || !Number.isFinite(columnSetting.width)) {
+                    continue;
+                }
+
+                const column = table.getColumn(columnSetting.field);
+                if (column) {
+                    column.setWidth(columnSetting.width);
+                }
+            }
+        };
+
+        const applyHeaderFilters = (settings) => {
+            if (!Array.isArray(settings?.filters)) {
+                return;
+            }
+
+            for (const filter of settings.filters) {
+                if (!filter || typeof filter.field !== 'string') {
+                    continue;
+                }
+
+                table.setHeaderFilterValue(filter.field, filter.value == null ? '' : String(filter.value));
+            }
+        };
+
         const scheduleGridViewportRestore = () => {
             window.requestAnimationFrame(() => {
                 window.requestAnimationFrame(() => {
@@ -484,18 +515,7 @@
 
             isRestoringGridSettings = true;
 
-            if (Array.isArray(settings.columns) && settings.columns.length > 0) {
-                for (const columnSetting of settings.columns) {
-                    if (!columnSetting || typeof columnSetting.field !== 'string' || !Number.isFinite(columnSetting.width)) {
-                        continue;
-                    }
-
-                    const column = table.getColumn(columnSetting.field);
-                    if (column) {
-                        column.setWidth(columnSetting.width);
-                    }
-                }
-            }
+            applyColumnWidths(settings);
 
             if (Number.isFinite(settings.page) && settings.page > 0) {
                 table.setPage(settings.page)
@@ -531,7 +551,16 @@
         });
 
         companySelect.addEventListener('change', () => {
-            table.setData();
+            const settings = getGridSettings();
+
+            isRestoringGridSettings = true;
+            table.setData()
+                .finally(() => {
+                    applyColumnWidths(settings);
+                    applyHeaderFilters(settings);
+                    isRestoringGridSettings = false;
+                    saveGridSettings();
+                });
         });
 
         table.on('pageSizeChanged', saveGridSettings);
