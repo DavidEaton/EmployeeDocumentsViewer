@@ -340,6 +340,66 @@
             });
         };
 
+
+        const sanitizeDigits = (value) => String(value ?? '').replace(/\D+/g, '');
+
+        const buildNumericHeaderFilter = ({ maxDigits, exactDigits = false } = {}) => (cell, onRendered, success, cancel) => {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.inputMode = 'numeric';
+            input.autocomplete = 'off';
+            input.className = 'tabulator-header-filter';
+
+            if (Number.isFinite(maxDigits) && maxDigits > 0) {
+                input.maxLength = maxDigits;
+            }
+
+            if (exactDigits && Number.isFinite(maxDigits) && maxDigits > 0) {
+                input.minLength = maxDigits;
+                input.placeholder = `${maxDigits} digits`;
+            }
+
+            const commit = () => {
+                const digits = sanitizeDigits(input.value);
+                const boundedDigits = Number.isFinite(maxDigits) && maxDigits > 0
+                    ? digits.slice(0, maxDigits)
+                    : digits;
+
+                input.value = boundedDigits;
+
+                if (exactDigits && Number.isFinite(maxDigits) && boundedDigits.length > 0 && boundedDigits.length !== maxDigits) {
+                    success('');
+                    return;
+                }
+
+                success(boundedDigits);
+            };
+
+            onRendered(() => {
+                input.value = sanitizeDigits(cell.getValue());
+            });
+
+            input.addEventListener('input', () => {
+                const digits = sanitizeDigits(input.value);
+                input.value = Number.isFinite(maxDigits) && maxDigits > 0
+                    ? digits.slice(0, maxDigits)
+                    : digits;
+                commit();
+            });
+
+            input.addEventListener('change', commit);
+            input.addEventListener('blur', commit);
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    commit();
+                } else if (event.key === 'Escape') {
+                    cancel();
+                }
+            });
+
+            return input;
+        };
+
         const table = new Tabulator('#document-grid', {
             layout: 'fitColumns',
             pagination: true,
@@ -452,11 +512,11 @@
             },
 
             columns: [
-                { title: 'EeId', field: 'employeeId', headerFilter: 'input', headerSort: true, minWidth: 80, maxWidth: 120, widthShrink: 3, cellClick: makeCellClickHandler },
+                { title: 'EeId', field: 'employeeId', headerFilter: buildNumericHeaderFilter(), headerSort: true, minWidth: 80, maxWidth: 120, widthShrink: 3, cellClick: makeCellClickHandler },
                 { title: 'Employee Name', field: 'employeeName', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
                 { title: 'Home Department', field: 'department', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
                 { title: 'Document Type', field: 'documentType', headerFilter: 'input', headerSort: true, cellClick: makeCellClickHandler },
-                { title: 'Year', field: 'year', headerFilter: 'input', headerSort: true, minWidth: 70, maxWidth: 90, widthShrink: 3, cellClick: makeCellClickHandler },
+                { title: 'Year', field: 'year', headerFilter: buildNumericHeaderFilter({ maxDigits: 4, exactDigits: true }), headerSort: true, minWidth: 70, maxWidth: 90, widthShrink: 3, cellClick: makeCellClickHandler },
                 {
                     title: 'Status',
                     field: 'terminationDate',
