@@ -198,6 +198,56 @@
 
         let gridViewportAnchor = null;
         let shouldRestoreGridViewport = false;
+        const gridSettingsStorageKey = 'employee-documents-grid-settings-v1';
+        let restoredInitialGridSettings = false;
+
+        const saveGridSettings = () => {
+            const sorters = table.getSorters()
+                .filter(sorter => sorter && typeof sorter.field === 'string')
+                .map(sorter => ({
+                    field: sorter.field,
+                    dir: sorter.dir === 'desc' ? 'desc' : 'asc'
+                }));
+
+            const filters = table.getHeaderFilters()
+                .filter(filter => filter && typeof filter.field === 'string')
+                .map(filter => ({
+                    field: filter.field,
+                    value: filter.value == null ? '' : String(filter.value)
+                }));
+
+            const columns = table.getColumns()
+                .map(column => ({
+                    field: column.getField(),
+                    width: column.getWidth()
+                }))
+                .filter(column => typeof column.field === 'string' && Number.isFinite(column.width));
+
+            const settings = {
+                pageSize: table.getPageSize(),
+                page: table.getPage(),
+                sorters,
+                filters,
+                columns,
+                scrollY: window.scrollY
+            };
+
+            window.localStorage.setItem(gridSettingsStorageKey, JSON.stringify(settings));
+        };
+
+        const getGridSettings = () => {
+            try {
+                const serialized = window.localStorage.getItem(gridSettingsStorageKey);
+                if (!serialized) {
+                    return null;
+                }
+
+                const parsed = JSON.parse(serialized);
+                return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch {
+                return null;
+            }
+        };
 
         const captureGridViewportAnchor = () => {
             const gridElement = document.getElementById('document-grid');
@@ -405,6 +455,61 @@
 
         table.on('tableBuilt', () => {
             applyTabulatorTheme();
+
+            if (restoredInitialGridSettings) {
+                return;
+            }
+
+            restoredInitialGridSettings = true;
+            const settings = getGridSettings();
+
+            if (!settings) {
+                return;
+            }
+
+            if (Number.isFinite(settings.pageSize) && settings.pageSize > 0) {
+                table.setPageSize(settings.pageSize);
+            }
+
+            if (Array.isArray(settings.columns) && settings.columns.length > 0) {
+                for (const columnSetting of settings.columns) {
+                    if (!columnSetting || typeof columnSetting.field !== 'string' || !Number.isFinite(columnSetting.width)) {
+                        continue;
+                    }
+
+                    const column = table.getColumn(columnSetting.field);
+                    if (column) {
+                        column.setWidth(columnSetting.width);
+                    }
+                }
+            }
+
+            if (Array.isArray(settings.sorters)) {
+                table.setSort(settings.sorters);
+            }
+
+            if (Array.isArray(settings.filters)) {
+                const headerFilters = settings.filters
+                    .filter(filter => filter && typeof filter.field === 'string')
+                    .map(filter => ({
+                        field: filter.field,
+                        value: filter.value == null ? '' : String(filter.value)
+                    }));
+
+                for (const headerFilter of headerFilters) {
+                    table.setHeaderFilterValue(headerFilter.field, headerFilter.value);
+                }
+            }
+
+            if (Number.isFinite(settings.page) && settings.page > 0) {
+                table.setPage(settings.page);
+            }
+
+            if (Number.isFinite(settings.scrollY) && settings.scrollY >= 0) {
+                window.requestAnimationFrame(() => {
+                    window.scrollTo({ top: settings.scrollY, behavior: 'auto' });
+                });
+            }
         });
 
         table.on('pageLoaded', scheduleGridViewportRestore);
@@ -424,6 +529,15 @@
         companySelect.addEventListener('change', () => {
             table.setData();
         });
+
+        table.on('pageSizeChanged', saveGridSettings);
+        table.on('columnResized', saveGridSettings);
+        table.on('dataFiltered', saveGridSettings);
+        table.on('dataSorted', saveGridSettings);
+        table.on('pageLoaded', saveGridSettings);
+        window.addEventListener('scroll', () => {
+            saveGridSettings();
+        }, { passive: true });
 
         document.getElementById('document-grid')?.addEventListener('pointerdown', (event) => {
             const pagerControl = event.target?.closest?.('.tabulator-page, .tabulator-page-size');
