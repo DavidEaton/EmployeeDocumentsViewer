@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace EmployeeDocumentsViewer.Features.Documents.List;
 
 public sealed record DocumentReadRow(

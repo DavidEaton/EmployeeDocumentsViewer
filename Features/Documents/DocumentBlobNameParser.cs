@@ -1,3 +1,9 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using Azure.Storage.Blobs.Models;
+
 namespace EmployeeDocumentsViewer.Features.Documents;
 
 public static partial class DocumentBlobNameParser

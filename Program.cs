@@ -1,5 +1,15 @@
+using System.Diagnostics;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text.Json;
 using EmployeeDocumentsViewer.Configuration;
 using EmployeeDocumentsViewer.Features.Documents;
+using FastEndpoints.Swagger;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 

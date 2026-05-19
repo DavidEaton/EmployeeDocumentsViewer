@@ -1,4 +1,7 @@
 using EmployeeDocumentsViewer.Configuration;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.Extensions.Options;
 
 namespace EmployeeDocumentsViewer.Pages.Documents;
 
